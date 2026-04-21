@@ -1,0 +1,69 @@
+# blendemu pipeline configuration — example
+# FS2 catalogue, LSST r-band only
+#
+# Copy this file to `fs2_lsst_r.yaml` (gitignored) and fill in the paths
+# for your own environment.
+# ---
+
+catalog:
+  type: fs2
+  path: /path/to/FS2_catalog.feather        # base FS2 catalogue
+  mag_column: lsst_r_mag
+  mag_cut: 27
+  re_convention: circularized
+
+simulation:
+  output_path: /path/to/sim_outputs/        # where sim images + catalogues are written
+  base_config: /path/to/base_sim_config.ini # MultiBand_ImSim base .ini
+  n_cases: 200
+  case_offset: 0
+  shear_values: [0.0, 0.1]
+  pixel_scale: 0.2
+
+noise:
+  source: csv
+  csv_path: /path/to/noise_params.csv       # multi-survey noise parameter CSV
+  band: LSST_r
+
+shape_measurement:
+  stamp_size: 48
+  pixel_scale: 0.2
+  use_pos: detect
+  tile_name: tile180.0_-0.5
+
+catalogues:
+  response:
+    r_max: 10    # arcsec
+    k: 20
+  self_response:
+    r_max: 10    # arcsec
+    k: 5
+    shape_suffix: _secondaries
+  detection:
+    r_max_deg: 0.000833  # ~3 arcsec
+    k: 2
+  batch_size: 100
+  n_jobs: 16
+
+training:
+  model_dir: ./models                       # relative to repo root, or absolute
+  model_tag: lsst_r                         # appended to saved model filenames
+  n_trials: 200
+  regression_cuts:      [[18, 26], [18, 26], [0.1, 1.5], [0.1, 1.5], [0, 7]]
+  self_response_cuts:   [[18, 28], [18, 26], [0.05, 3.0], [0.1, 1.5], [0, 10]]
+  classification_cuts:  [[18, 26], [18, 26], [0.1, 1.5], [0.1, 1.5], [0, 5]]
+  rescale:
+    pixel_rms: 0.312       # LSST r-band
+    pixel_size: 0.2
+    zero_mag: 30
+    psf_fwhm: 0.73
+    moffat_beta: 2.224
+
+inference:
+  catalogue_path: ./data/example_catalog.feather
+  resample_frac: 0.25
+  seed: 42
+
+cluster:
+  n_mpi: 50
+  realizations: "d,0,1"

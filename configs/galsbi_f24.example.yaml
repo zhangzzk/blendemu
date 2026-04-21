@@ -1,0 +1,41 @@
+# blendemu pipeline configuration — example
+# galsbi f24 catalogue, single r-band (manual noise)
+#
+# Copy this file to `galsbi_f24.yaml` (gitignored) and fill in paths.
+# ---
+
+catalog:
+  type: galsbi
+  path: /path/to/galsbi_f24_r_ucat.gal.cat
+  mag_cut: 28
+
+simulation:
+  output_path: /path/to/sim_outputs/galsbi_f24/
+  base_config: /path/to/base_sim_config.ini
+  n_cases: 200
+  shear_values: [0.0, 0.1]
+  pixel_scale: 0.2
+
+noise:
+  source: manual
+  rms: 6.0
+  seeing: 0.6
+  moffat_beta: 2.4
+
+shape_measurement:
+  stamp_size: 48
+  use_pos: detect
+
+catalogues:
+  response:
+    r_max: 10
+    k: 20
+  detection:
+    r_max_deg: 0.000833
+    k: 2
+  batch_size: 100
+  n_jobs: 16
+
+cluster:
+  n_mpi: 50
+  realizations: "d,0,1"

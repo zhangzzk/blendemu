@@ -1,0 +1,43 @@
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Local (private) configs and job scripts — users keep their own copies
+# alongside the tracked `*.example.yaml` / `*.example.sh` templates.
+configs/*.yaml
+!configs/*.example.yaml
+jobs/*.sh
+!jobs/*.example.sh
+
+# Notebooks: only the tutorial is tracked
+notebooks/*.ipynb
+!notebooks/tutorials.ipynb
+.ipynb_checkpoints/
+
+# Optuna study databases (user-specific, large)
+models/studies/
+
+# Logs and slurm output
+logs/
+*.log
+slurm-*.out
+*.err
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
