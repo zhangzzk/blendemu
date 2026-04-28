@@ -1,8 +1,24 @@
-# blendemu
+```text
+                    ██████╗ ██╗     ███████╗███╗   ██╗██████╗ ███████╗███╗   ███╗██╗   ██╗
+                    ██╔══██╗██║     ██╔════╝████╗  ██║██╔══██╗██╔════╝████╗ ████║██║   ██║
+                    ██████╔╝██║     █████╗  ██╔██╗ ██║██║  ██║█████╗  ██╔████╔██║██║   ██║
+                    ██╔══██╗██║     ██╔══╝  ██║╚██╗██║██║  ██║██╔══╝  ██║╚██╔╝██║██║   ██║
+                    ██████╔╝███████╗███████╗██║ ╚████║██████╔╝███████╗██║ ╚═╝ ██║╚██████╔╝
+                    ╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═══╝╚═════╝ ╚══════╝╚═╝     ╚═╝ ╚═════╝
+```
 
-End-to-end weak lensing blending pipeline: **simulate → measure → train emulators → apply emulators to correct n(z)**.
+---
+
+End-to-end weak lensing blending pipeline: **simulate → measure → train emulators → inference**.
 
 Paper: [Zhang et al. 2025, arXiv:2507.19130](https://arxiv.org/pdf/2507.19130)
+
+<p align="center">
+  <img src="example_0.png" width="46%" alt="Simulated blended field at g_s = 0.0">
+  &nbsp;
+  <img src="example_1.png" width="46%" alt="Same field at g_s = 0.1">
+</p>
+<p align="center"><i>The same simulated field at <code>g<sub>s</sub> = 0.0</code> (left) and <code>g<sub>s</sub> = 0.1</code> (right). Dashed red/blue circles mark input primaries/secondaries inside the matching radius θ<sub>max</sub>; cyan ticks in the right panel show shear measured at the primary positions — the response signal that the emulator learns.</i></p>
 
 ## Pipeline overview
 
@@ -15,38 +31,8 @@ Paper: [Zhang et al. 2025, arXiv:2507.19130](https://arxiv.org/pdf/2507.19130)
 | 4 | `run_pipeline.py --steps 4` | Build blending-response + detection catalogues |
 | 4b | `run_pipeline.py --steps 4b` | Build **self-response** catalogue |
 | 5 | `train_emulator.py --mode {tune,train}` | Optuna hyperparameter tuning + XGBoost training |
-| **6** | **`run_inference.py`** | **Apply trained emulators to an input catalogue → corrected n(z)** |
+| **6** | **`run_inference.py`** | **Apply trained emulators to an input catalogue** |
 
-## Directory layout
-
-```
-blendemu/
-├── blendemu/                       # Python package
-│   ├── catalog.py                  # galaxy catalogue generation (FS2, galsbi)
-│   ├── shape.py                    # ngmix + GalSim HSM shape measurement
-│   ├── response.py                 # response, detection, self-response catalogues
-│   ├── data_utils.py               # loading, rescaling, feature engineering
-│   ├── utils.py                    # KDTree helpers, bright-neighbor removal
-│   ├── nz_utils.py                 # low-level n(z) correction math
-│   ├── inference.py                # BlendingPredictor (high-level inference)
-│   └── config.py                   # YAML config loader
-├── scripts/                        # CLI entry points
-│   ├── run_pipeline.py             # simulation + catalogue assembly stages
-│   ├── run_sim.py                  # MPI worker for image sim
-│   ├── run_shape.py                # MPI worker for shape measurement
-│   ├── train_emulator.py           # Optuna tune / final train
-│   └── run_inference.py            # apply emulators, produce corrected n(z)
-├── configs/                        # YAML configs (fs2_lsst_r, galsbi_f24, ...)
-├── notebooks/                      # analysis + inspection
-│   ├── test_inspection.ipynb            # simulation run diagnostics
-│   ├── inspect_emulator.ipynb           # blending-response emulator results
-│   ├── inspect_self_response.ipynb      # self-response emulator results
-│   └── inference_nz_correction.ipynb    # apply emulators to correct n(z)
-├── models/                         # trained XGBoost models + standardization
-├── data/                           # example galaxy catalogues
-├── jobs/                           # SLURM submission scripts
-└── README.md
-```
 
 ## Setup
 
