@@ -14,7 +14,7 @@ catalog:
 
 simulation:
   output_path: /path/to/sim_outputs/        # where sim images + catalogues are written
-  base_config: /path/to/base_sim_config.ini # MultiBand_ImSim base .ini
+  base_config: base_sim_config.ini          # relative to this YAML file
   n_cases: 200
   case_offset: 0
   shear_values: [0.0, 0.1]
@@ -40,7 +40,7 @@ catalogues:
     k: 5
     shape_suffix: _secondaries
   detection:
-    r_max_deg: 0.000833  # ~3 arcsec
+    r_max: 3    # arcsec
     k: 2
   batch_size: 100
   n_jobs: 16
@@ -51,7 +51,7 @@ training:
   n_trials: 200
   regression_cuts:      [[18, 26], [18, 26], [0.1, 1.5], [0.1, 1.5], [0, 7]]
   self_response_cuts:   [[18, 28], [18, 26], [0.05, 3.0], [0.1, 1.5], [0, 10]]
-  classification_cuts:  [[18, 26], [18, 26], [0.1, 1.5], [0.1, 1.5], [0, 5]]
+  classification_cuts:  [[18, 27], [18, 27], [0.1, 1.5], [0.1, 1.5], [0, 5]]
   rescale:
     pixel_rms: 0.312       # LSST r-band
     pixel_size: 0.2

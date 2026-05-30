@@ -33,6 +33,17 @@ Paper: [Zhang et al. 2025, arXiv:2507.19130](https://arxiv.org/pdf/2507.19130)
 | 5 | `train_emulator.py --mode {tune,train}` | Optuna hyperparameter tuning + XGBoost training |
 | **6** | **`run_inference.py`** | **Apply trained emulators to an input catalogue** |
 
+## Shear Coordinate Convention
+
+Blendemu uses the usual sky spin-2 convention for generated shear and
+ellipticity-like components:
+
+```text
+(q1, q2) = q * (cos 2 theta, sin 2 theta)
+```
+
+Generated catalogues carry `shear_component_convention = "sky_cos_sin"`.
+
 
 ## Setup
 
@@ -50,6 +61,9 @@ Copy the example config and fill in paths for your environment:
 cp configs/fs2_lsst_r.example.yaml configs/fs2_lsst_r.yaml
 # edit configs/fs2_lsst_r.yaml to point at your data / output directories
 ```
+
+The MultiBand_ImSim base config is kept in `configs/base_sim_config.ini`;
+the example YAMLs reference it relative to the YAML file.
 
 If you intend to run the image-simulation steps, also point at your local
 clone of MultiBand_ImSim:
@@ -98,6 +112,17 @@ python scripts/run_inference.py \
     --nz-file hsc_nz.fits \
     --output corrected_nz.fits
 ```
+
+For detection/classification training, make sure
+`training.classification_cuts[1][1]` reaches the faint limit of the catalogue
+you will run inference on (`catalog.mag_cut`). XGBoost does not extrapolate a
+survey-depth rolloff beyond the magnitude range it saw during training.
+
+Training writes `models/emulator_metadata_<tag>.json`, which keeps the task
+model filenames, feature boundaries, y-standardization, training parameters,
+and summary metrics in one sidecar file. New training runs no longer emit the
+old boundary/standardization `.npy` sidecars; `BlendingPredictor.load()` only
+keeps `.npy` fallback support for older external model directories.
 
 ## Dependencies
 

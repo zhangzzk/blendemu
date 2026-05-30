@@ -19,6 +19,16 @@ from mpi4py import MPI
 from blendemu import shape
 
 
+def shear_label(g):
+    """Compact shear label matching simulation directory names."""
+    label = f"{float(g):.3f}".rstrip('0').rstrip('.')
+    if label == "-0":
+        label = "0"
+    if "." not in label:
+        label += ".0"
+    return label
+
+
 def get_shape(stamp, psf_im, scale=0.2, methods=['ngmix']):
     """Measure shape on a single stamp using specified methods."""
     g_galsim = np.array([-1., -1.])
@@ -95,7 +105,7 @@ def main():
             print(f"Rank {rank} has no work.")
             return
 
-    case = f'{case}_{shear_case:.1f}'
+    case = f'{case}_{shear_label(shear_case)}'
 
     for i in range(nreal0, nreal):
         real = f'real{i}'

@@ -1,0 +1,284 @@
+{
+  "format_version": 1,
+  "tag": "lsst_r",
+  "tasks": {
+    "classification": {
+      "boundary": [
+        [
+          0.1865010451781354,
+          0.9435082120956629
+        ],
+        [
+          0.01993310742410843,
+          0.9986153751620044
+        ],
+        [
+          20.081809432462975,
+          30.081260116056725
+        ],
+        [
+          13.224486739591882,
+          31.081260116056725
+        ],
+        [
+          0.5127088630200495,
+          5.851273922453501
+        ],
+        [
+          0.5127088630200495,
+          5.851273922453501
+        ],
+        [
+          0.0007824812428010058,
+          5.594532512862638
+        ]
+      ],
+      "cuts": [
+        [
+          18,
+          28
+        ],
+        [
+          18,
+          28
+        ],
+        [
+          0.1,
+          1.5
+        ],
+        [
+          0.1,
+          1.5
+        ],
+        [
+          0,
+          3
+        ]
+      ],
+      "features": [
+        "Re_input_p_scaled",
+        "Re_input_s_scaled",
+        "r_input_p_scaled",
+        "r_input_s_scaled",
+        "sersic_n_input_p",
+        "sersic_n_input_s",
+        "distance_scaled"
+      ],
+      "metrics": {
+        "accuracy": 0.9033242599942439,
+        "balanced_accuracy": 0.9032834208523846,
+        "best_iteration": 130,
+        "best_score": 0.24613624925947422,
+        "best_trees": 131,
+        "score_name": "logloss"
+      },
+      "model_file": "classification_model_lsst_r.json",
+      "params": {
+        "booster": "gbtree",
+        "colsample_bytree": 0.9556674659210342,
+        "device": "cuda",
+        "gamma": 0.017059395190662907,
+        "learning_rate": 0.16154830815056245,
+        "max_depth": 9,
+        "min_child_weight": 161,
+        "n_jobs": -1,
+        "objective": "binary:logistic",
+        "reg_alpha": 0.003239447934442709,
+        "reg_lambda": 0.9463720390498181,
+        "subsample": 0.959173065337887
+      },
+      "train_curve_file": "classification_train_curve_lsst_r.npz"
+    },
+    "regression": {
+      "boundary": [
+        [
+          0.1865010451781354,
+          0.943508073110227
+        ],
+        [
+          0.1865010451781354,
+          0.9435082120956629
+        ],
+        [
+          20.081809432462975,
+          30.0812295984786
+        ],
+        [
+          20.083350570158288,
+          30.081260116056725
+        ],
+        [
+          0.5127088630200495,
+          5.851273922453501
+        ],
+        [
+          0.5127088630200495,
+          5.851273922453501
+        ],
+        [
+          0.006459903990760738,
+          18.64999850157279
+        ]
+      ],
+      "cuts": [
+        [
+          18,
+          28
+        ],
+        [
+          18,
+          28
+        ],
+        [
+          0.1,
+          1.5
+        ],
+        [
+          0.1,
+          1.5
+        ],
+        [
+          0,
+          10
+        ]
+      ],
+      "features": [
+        "Re_input_p_scaled",
+        "Re_input_s_scaled",
+        "r_input_p_scaled",
+        "r_input_s_scaled",
+        "sersic_n_input_p",
+        "sersic_n_input_s",
+        "distance_scaled"
+      ],
+      "metrics": {
+        "best_iteration": 229,
+        "best_score": 0.005448,
+        "best_trees": 230,
+        "score_name": "r2"
+      },
+      "model_file": "regression_model_lsst_r.json",
+      "params": {
+        "booster": "gbtree",
+        "colsample_bytree": 0.8694219098128878,
+        "device": "cuda",
+        "disable_default_eval_metric": 1,
+        "gamma": 3.1914062425188834,
+        "learning_rate": 0.038392817856125944,
+        "max_depth": 8,
+        "min_child_weight": 154,
+        "n_jobs": -1,
+        "objective": "reg:squarederror",
+        "reg_alpha": 0.08845742307930674,
+        "reg_lambda": 0.007432507464985067,
+        "subsample": 0.9699684593953087
+      },
+      "standardization": {
+        "mean": 0.010681778358237332,
+        "std": 1.0518722157225542
+      },
+      "train_curve_file": "regression_train_curve_lsst_r.npz"
+    },
+    "self_response": {
+      "boundary": [
+        [
+          0.1865010451781354,
+          0.943508073110227
+        ],
+        [
+          0.18650117904563474,
+          0.9435074774760231
+        ],
+        [
+          20.085349471525475,
+          30.08122196908407
+        ],
+        [
+          20.340056807951257,
+          30.081260116056725
+        ],
+        [
+          0.5127088630200495,
+          5.851273922453501
+        ],
+        [
+          0.5127088630200495,
+          5.851273922453501
+        ],
+        [
+          0.0007824812428010058,
+          5.594513971748164
+        ]
+      ],
+      "cuts": [
+        [
+          18,
+          28
+        ],
+        [
+          18,
+          28
+        ],
+        [
+          0.1,
+          1.5
+        ],
+        [
+          0.1,
+          1.5
+        ],
+        [
+          0,
+          3
+        ]
+      ],
+      "features": [
+        "Re_input_p_scaled",
+        "Re_input_s_scaled",
+        "r_input_p_scaled",
+        "r_input_s_scaled",
+        "sersic_n_input_p",
+        "sersic_n_input_s",
+        "distance_scaled"
+      ],
+      "metrics": {
+        "best_iteration": 1691,
+        "best_score": 0.014233,
+        "best_trees": 1692,
+        "score_name": "r2"
+      },
+      "model_file": "self_response_model_lsst_r.json",
+      "params": {
+        "booster": "gbtree",
+        "colsample_bytree": 0.9355765310192693,
+        "device": "cuda",
+        "disable_default_eval_metric": 1,
+        "gamma": 4.255485054536232,
+        "learning_rate": 0.005581786891082725,
+        "max_depth": 5,
+        "min_child_weight": 188,
+        "n_jobs": -1,
+        "objective": "reg:squarederror",
+        "reg_alpha": 0.00663433080310004,
+        "reg_lambda": 5.322256101965445,
+        "subsample": 0.7446858665686177
+      },
+      "standardization": {
+        "mean": 0.29690309290154343,
+        "std": 4.053461748826296
+      },
+      "train_curve_file": "self_response_train_curve_lsst_r.npz"
+    }
+  },
+  "training": {
+    "random_state": 321,
+    "rescale": {
+      "moffat_beta": 2.224,
+      "pixel_rms": 0.312,
+      "pixel_size": 0.2,
+      "psf_fwhm": 0.73,
+      "zero_mag": 30
+    },
+    "test_size": 0.2
+  }
+}

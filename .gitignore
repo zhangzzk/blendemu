@@ -18,6 +18,7 @@ notebooks/*.ipynb
 
 # Optuna study databases (user-specific, large)
 models/studies/
+models/*.lock
 
 # Logs and slurm output
 logs/

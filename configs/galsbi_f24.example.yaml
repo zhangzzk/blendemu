@@ -11,7 +11,7 @@ catalog:
 
 simulation:
   output_path: /path/to/sim_outputs/galsbi_f24/
-  base_config: /path/to/base_sim_config.ini
+  base_config: base_sim_config.ini
   n_cases: 200
   shear_values: [0.0, 0.1]
   pixel_scale: 0.2
@@ -31,7 +31,7 @@ catalogues:
     r_max: 10
     k: 20
   detection:
-    r_max_deg: 0.000833
+    r_max: 3
     k: 2
   batch_size: 100
   n_jobs: 16

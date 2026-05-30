@@ -25,6 +25,16 @@ if SIM_RUN_SCRIPT is None:
     )
 
 
+def shear_label(g):
+    """Compact shear label matching blendemu.catalog.write_config_file."""
+    label = f"{float(g):.3f}".rstrip('0').rstrip('.')
+    if label == "-0":
+        label = "0"
+    if "." not in label:
+        label += ".0"
+    return label
+
+
 def main():
     parser = argparse.ArgumentParser(description='Simulation Execution Wrapper')
     parser.add_argument('path', type=str, help='Work directory containing configs and outputs')
@@ -73,7 +83,7 @@ def main():
         else:
             return
 
-    config_name = f'sim_config_case{case}_{shear_case:.1f}.ini'
+    config_name = f'sim_config_case{case}_{shear_label(shear_case)}.ini'
 
     for i in range(nreal0, nreal):
         real = f'real{i}'

@@ -9,7 +9,7 @@ The package covers the full pipeline:
 
 Module overview:
     catalog     Galaxy catalogue generation for image simulations
-    shape       Shape measurement with ngmix and GalSim
+    shape       Shape measurement with ngmix and GalSim (import on demand)
     response    Response, detection, and self-response catalogue construction
     data_utils  Data loading, preprocessing, feature rescaling
     utils       KDTree neighbor finding, bright-neighbor removal, prediction helpers
@@ -18,6 +18,6 @@ Module overview:
     config      YAML configuration loader
 """
 
-from . import catalog, shape, response, data_utils, utils, nz_utils, inference
+from . import catalog, response, data_utils, utils, nz_utils, inference
 from .inference import BlendingPredictor
 from .config import load_config

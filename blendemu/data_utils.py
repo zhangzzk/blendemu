@@ -18,7 +18,33 @@ def source_select_reg(dataset, cuts=[[18, 26], [18, 26], [0.1, 1.5], [0.1, 1.5],
         & (dataset['Re_input_p'] > cuts[3][0]) & (dataset['Re_input_p'] < cuts[3][1])
         & (dataset['distance'] > cuts[4][0]) & (dataset['distance'] < cuts[4][1])
     )[0]
-    dataset = dataset.iloc[idx_sel].reset_index()
+    dataset = dataset.iloc[idx_sel].reset_index(drop=True)
+    return dataset
+
+
+def source_select_self_response(dataset, cuts=[[18, 28], [18, 26], [0.05, 3.0], [0.1, 1.5], [0, 10]]):
+    """Select self-response rows, preserving isolated targets when present.
+
+    Pair-shaped self-response catalogues have no ``neighbored`` column and use
+    the usual pair-regression cuts.  Nearest-neighbour catalogues may include
+    isolated targets with NaN neighbour fields; those rows should pass the
+    neighbour cuts if the target itself passes the primary cuts.
+    """
+    target_ok = (
+        (dataset['r_input_p'] > cuts[1][0]) & (dataset['r_input_p'] < cuts[1][1])
+        & (dataset['Re_input_p'] > cuts[3][0]) & (dataset['Re_input_p'] < cuts[3][1])
+    )
+    if 'neighbored' not in dataset.columns:
+        return source_select_reg(dataset, cuts=cuts)
+
+    neighbored = dataset['neighbored'].fillna(False).astype(bool)
+    neighbour_ok = (
+        (dataset['r_input_s'] > cuts[0][0]) & (dataset['r_input_s'] < cuts[0][1])
+        & (dataset['Re_input_s'] > cuts[2][0]) & (dataset['Re_input_s'] < cuts[2][1])
+        & (dataset['distance'] > cuts[4][0]) & (dataset['distance'] < cuts[4][1])
+    )
+    idx_sel = np.where(target_ok & ((neighbored & neighbour_ok) | (~neighbored)))[0]
+    dataset = dataset.iloc[idx_sel].reset_index(drop=True)
     return dataset
 
 
@@ -29,7 +55,7 @@ def source_select_cla(dataset, cuts=[[18, 26], [18, 26], [0.1, 1.5], [0.1, 1.5],
         & (dataset['Re_input_p'] > cuts[3][0]) & (dataset['Re_input_p'] < cuts[3][1])
         & ((dataset['distance'] > cuts[4][0]) & (dataset['distance'] < cuts[4][1]) | (~dataset['neighbored']))
     )[0]
-    dataset = dataset.iloc[idx_sel].reset_index()
+    dataset = dataset.iloc[idx_sel].reset_index(drop=True)
     return dataset
 
 
@@ -209,9 +235,20 @@ def polyfit(x, y):
 
 # --- XGBoost prediction ---
 
+def get_xgb_iteration_range(model):
+    """Return the inclusive early-stopping best model as XGBoost's half-open range."""
+    try:
+        best_iteration = model.best_iteration
+    except AttributeError:
+        return (0, 0)
+    if best_iteration is None:
+        return (0, 0)
+    return (0, best_iteration + 1)
+
+
 def xgb_pred(model, cat):
     """Run XGBoost prediction on catalogue features matching model feature names."""
     features = cat[model.feature_names]
     DM = xgb.DMatrix(features)
-    pred = model.predict(DM, iteration_range=[0, model.best_iteration])
+    pred = model.predict(DM, iteration_range=get_xgb_iteration_range(model))
     return pred

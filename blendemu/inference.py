@@ -11,6 +11,7 @@ Main entry points:
   - predictor.correct_nz(icat, nz)                   # apply to a catalogue
 """
 
+import json
 import os
 import numpy as np
 import pandas as pd
@@ -62,7 +63,7 @@ class BlendingPredictor:
              cla_file=None, reg_file=None, self_file=None,
              standardization_file=None, standardization_self_file=None,
              boundary_cla_file=None, boundary_reg_file=None, boundary_self_file=None,
-             load_self=True):
+             load_self=True, metadata_file=None):
         """
         Load a trained emulator suite from disk.
 
@@ -80,15 +81,33 @@ class BlendingPredictor:
         load_self : bool
             If True (default) and the self-response model file exists, also
             load the self-response emulator. Set False to skip.
+        metadata_file : str, optional
+            JSON sidecar containing task model filenames, training boundaries,
+            y-standardization, and training parameters. Defaults to
+            'emulator_metadata_{tag}.json' when a tag is provided. If absent,
+            legacy .npy metadata files are used.
 
         Returns
         -------
         BlendingPredictor
         """
         suffix = f'_{tag}' if tag else ''
-        cla_file = cla_file or f'classification_model{suffix}.json'
-        reg_file = reg_file or f'regression_model{suffix}.json'
-        self_file = self_file or f'self_response_model{suffix}.json'
+
+        explicit_standardization_file = standardization_file is not None
+        explicit_standardization_self_file = standardization_self_file is not None
+        explicit_boundary_cla_file = boundary_cla_file is not None
+        explicit_boundary_reg_file = boundary_reg_file is not None
+        explicit_boundary_self_file = boundary_self_file is not None
+
+        metadata_file = metadata_file or f'emulator_metadata{suffix}.json'
+        metadata = _load_metadata(os.path.join(model_dir, metadata_file))
+        meta_cla = _metadata_task(metadata, 'classification')
+        meta_reg = _metadata_task(metadata, 'regression')
+        meta_self = _metadata_task(metadata, 'self_response')
+
+        cla_file = cla_file or meta_cla.get('model_file') or f'classification_model{suffix}.json'
+        reg_file = reg_file or meta_reg.get('model_file') or f'regression_model{suffix}.json'
+        self_file = self_file or meta_self.get('model_file') or f'self_response_model{suffix}.json'
         standardization_file = standardization_file or f'train_standardization{suffix}.npy'
         standardization_self_file = standardization_self_file or f'train_standardization_self{suffix}.npy'
         boundary_cla_file = boundary_cla_file or f'train_boundary_cla{suffix}.npy'
@@ -102,9 +121,20 @@ class BlendingPredictor:
         bst_reg = xgb.Booster({'device': device, 'n_jobs': -1})
         bst_reg.load_model(os.path.join(model_dir, reg_file))
 
-        y_mean, y_std = np.load(os.path.join(model_dir, standardization_file))
-        bcla = _load_optional(os.path.join(model_dir, boundary_cla_file))
-        breg = _load_optional(os.path.join(model_dir, boundary_reg_file))
+        if not explicit_standardization_file:
+            standardization = _metadata_standardization(meta_reg)
+        else:
+            standardization = None
+        if standardization is None:
+            standardization = np.load(os.path.join(model_dir, standardization_file))
+        y_mean, y_std = standardization
+
+        bcla = None if explicit_boundary_cla_file else _metadata_boundary(meta_cla)
+        if bcla is None:
+            bcla = _load_optional(os.path.join(model_dir, boundary_cla_file))
+        breg = None if explicit_boundary_reg_file else _metadata_boundary(meta_reg)
+        if breg is None:
+            breg = _load_optional(os.path.join(model_dir, boundary_reg_file))
 
         # Self-response (optional)
         bst_self, y_mean_self, y_std_self, bself = None, None, None, None
@@ -113,16 +143,25 @@ class BlendingPredictor:
             bst_self = xgb.Booster({'device': device, 'n_jobs': -1})
             bst_self.load_model(self_path)
             std_self_path = os.path.join(model_dir, standardization_self_file)
-            if os.path.exists(std_self_path):
-                y_mean_self, y_std_self = np.load(std_self_path)
-            bself = _load_optional(os.path.join(model_dir, boundary_self_file))
+            if not explicit_standardization_self_file:
+                standardization_self = _metadata_standardization(meta_self)
+            else:
+                standardization_self = None
+            if standardization_self is None and os.path.exists(std_self_path):
+                standardization_self = np.load(std_self_path)
+            if standardization_self is not None:
+                y_mean_self, y_std_self = standardization_self
+
+            bself = None if explicit_boundary_self_file else _metadata_boundary(meta_self)
+            if bself is None:
+                bself = _load_optional(os.path.join(model_dir, boundary_self_file))
 
         return cls(bst_cla, bst_reg, y_mean, y_std,
                    boundaries_cla=bcla, boundaries_reg=breg, conditions=conditions,
                    bst_self=bst_self, y_mean_self=y_mean_self, y_std_self=y_std_self,
                    boundaries_self=bself)
 
-    def predict_detection(self, icat):
+    def predict_detection(self, icat, warn_extrapolation=True):
         """
         Predict per-galaxy detection probability.
 
@@ -131,7 +170,13 @@ class BlendingPredictor:
         pd.DataFrame
             Feature DataFrame with an added 'detection_prob' column.
         """
-        cla_fea = nz_utils.icat2cla(icat, icat, self.bst_cla, self.conditions)
+        cla_fea = nz_utils.icat2cla(
+            icat, icat, self.bst_cla, self.conditions, predict=False,
+        )
+        if warn_extrapolation and self.boundaries_cla is not None:
+            _warn_if_out_of_bounds(
+                cla_fea, self.bst_cla.feature_names, self.boundaries_cla, 'detection',
+            )
         cla_fea['detection_prob'] = data_utils.xgb_pred(self.bst_cla, cla_fea)
         return cla_fea
 
@@ -374,6 +419,36 @@ class BlendingPredictor:
 
 def _load_optional(path):
     return np.load(path) if os.path.exists(path) else None
+
+
+def _load_metadata(path):
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        return json.load(f)
+
+
+def _metadata_task(metadata, task):
+    return (metadata or {}).get('tasks', {}).get(task, {})
+
+
+def _metadata_boundary(task_metadata):
+    boundary = task_metadata.get('boundary')
+    if boundary is None:
+        return None
+    return np.asarray(boundary, dtype=float)
+
+
+def _metadata_standardization(task_metadata):
+    standardization = task_metadata.get('standardization')
+    if standardization is None:
+        return None
+    if isinstance(standardization, dict):
+        return (
+            float(standardization['mean']),
+            float(standardization['std']),
+        )
+    return tuple(float(value) for value in standardization)
 
 
 def _warn_if_out_of_bounds(df, feature_names, boundaries, task):

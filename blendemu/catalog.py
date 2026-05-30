@@ -19,6 +19,17 @@ FS2_CAT_PATH = None
 FS2_NOISE_CSV = None
 OUTPUT_PATH = None
 BASE_CONFIG_PATH = None
+SHEAR_COMPONENT_CONVENTION = 'sky_cos_sin'
+
+
+def shear_label(g):
+    """Compact shear label for directory/config names."""
+    label = f"{float(g):.3f}".rstrip('0').rstrip('.')
+    if label == "-0":
+        label = "0"
+    if "." not in label:
+        label += ".0"
+    return label
 
 
 def _require_path(path, name):
@@ -28,6 +39,40 @@ def _require_path(path, name):
             f"pipeline config YAML (see configs/*.example.yaml)."
         )
     return path
+
+
+def _format_ini_value(value):
+    if isinstance(value, float):
+        return f"{value:g}"
+    if isinstance(value, (list, tuple)):
+        return ", ".join(_format_ini_value(v) for v in value)
+    return str(value)
+
+
+def _replace_ini_value(content, section, key, value):
+    """Replace one key inside an INI section, preserving trailing comments."""
+    pattern = re.compile(
+        rf"(\[{re.escape(section)}\](?:(?!^\[).)*?^([ \t]*{re.escape(key)}\s*=\s*))"
+        rf"([^\n]*)",
+        flags=re.MULTILINE | re.DOTALL,
+    )
+
+    def repl(match):
+        line_tail = match.group(3)
+        comment_pos = line_tail.find('#')
+        if comment_pos >= 0:
+            before_comment = line_tail[:comment_pos]
+            trailing_space = re.search(r"\s*$", before_comment).group(0)
+            comment = line_tail[comment_pos:]
+            suffix = f"{trailing_space}{comment}"
+        else:
+            suffix = ""
+        return f"{match.group(1)}{_format_ini_value(value)}{suffix}"
+
+    content, n_sub = pattern.subn(repl, content, count=1)
+    if n_sub == 0:
+        raise KeyError(f"Missing [{section}] {key} in simulation base config")
+    return content
 
 
 def e1e2_to_q_phi(e1, e2):
@@ -213,7 +258,8 @@ def write_noise_file_from_csv(noise_csv_path=FS2_NOISE_CSV, band='LSST_r',
     print(f"  Band: {band}, RMS={rms:.3f}, seeing={seeing:.3f}\", beta={beta:.3f}")
 
 
-def generate_catalog_realization(gal_cat, num_sim, seed, g, shear_type='constant'):
+def generate_catalog_realization(gal_cat, num_sim, seed, g, shear_type='constant',
+                                 ra_range=(180.0, 181.0), dec_range=(0.0, 1.0)):
     """
     Generate one realization of a galaxy catalogue with random sampling and applied shear.
 
@@ -246,14 +292,14 @@ def generate_catalog_realization(gal_cat, num_sim, seed, g, shear_type='constant
     z_CAT = gal_cat['redshift'].iloc[idx].to_numpy()
     Ang_CAT = gal_cat['angle'].iloc[idx].to_numpy()
 
-    ra_CAT = rng.uniform(low=180, high=181, size=num_sim)
-    dec_CAT = rng.uniform(low=0, high=1, size=num_sim)
+    ra_CAT = rng.uniform(low=ra_range[0], high=ra_range[1], size=num_sim)
+    dec_CAT = rng.uniform(low=dec_range[0], high=dec_range[1], size=num_sim)
 
     g_CAT = np.zeros((num_sim, 2))
     if shear_type == 'constant':
         angles = rng.uniform(low=0, high=np.pi, size=int(num_sim / 2))
-        g_CAT[int(num_sim / 2):, 0] = g * np.sin(2 * angles)
-        g_CAT[int(num_sim / 2):, 1] = g * np.cos(2 * angles)
+        g_CAT[int(num_sim / 2):, 0] = g * np.cos(2 * angles)
+        g_CAT[int(num_sim / 2):, 1] = g * np.sin(2 * angles)
 
     cat = {
         'index': np.arange(0, num_sim),
@@ -262,6 +308,7 @@ def generate_catalog_realization(gal_cat, num_sim, seed, g, shear_type='constant
         'DEC': dec_CAT,
         'g1': g_CAT[:, 0],
         'g2': g_CAT[:, 1],
+        'shear_component_convention': np.full(num_sim, SHEAR_COMPONENT_CONVENTION),
         'position_angle': Ang_CAT,
         'redshift': z_CAT,
         'Re': Re_CAT,
@@ -273,9 +320,15 @@ def generate_catalog_realization(gal_cat, num_sim, seed, g, shear_type='constant
 
 
 def write_config_file(suffix, g, path=OUTPUT_PATH,
-                      base_config_path=BASE_CONFIG_PATH, file_name_cat=None):
+                      base_config_path=BASE_CONFIG_PATH, file_name_cat=None,
+                      survey=None, mag_cut=None, crossmatch_mag_faint_cut=None,
+                      pixel_scale=None):
     """
     Read base simulation config, substitute paths, and write a new config file.
+
+    Values supplied by the pipeline YAML override the base template so the
+    generated MultiBand_ImSim config cannot silently disagree with the run
+    configuration.
 
     Returns
     -------
@@ -284,31 +337,31 @@ def write_config_file(suffix, g, path=OUTPUT_PATH,
     """
     path = _require_path(path, "simulation.output_path")
     base_config_path = _require_path(base_config_path, "simulation.base_config")
+    g_label = shear_label(g)
     with open(base_config_path, 'r') as f:
         content = f.read()
 
-    content = re.sub(
-        r'(\[Paths\]([^\[])*out_dir\s=\s+).*',
-        r'\1%s' % (path + f'case{suffix}_{g:.1f}'),
-        content,
+    content = _replace_ini_value(
+        content, 'Paths', 'out_dir', os.path.join(path, f'case{suffix}_{g_label}')
     )
-    content = re.sub(
-        r'(\[Paths\]([^\[])*tmp_dir\s=\s+).*',
-        r'\1%s' % (path + f'case{suffix}_{g:.1f}_tmp'),
-        content,
+    content = _replace_ini_value(
+        content, 'Paths', 'tmp_dir', os.path.join(path, f'case{suffix}_{g_label}_tmp')
     )
-    content = re.sub(
-        r'(\[GalInfo\]([^\[])*cata_file\s=\s+).*',
-        r'\1%s' % file_name_cat,
-        content,
-    )
-    content = re.sub(
-        r'(\[NoiseInfo\]([^\[])*cata_file\s=\s+).*',
-        r'\1%s' % (path + 'noise.csv'),
-        content,
-    )
+    content = _replace_ini_value(content, 'GalInfo', 'cata_file', file_name_cat)
+    content = _replace_ini_value(content, 'NoiseInfo', 'cata_file', os.path.join(path, 'noise.csv'))
+    if mag_cut is not None:
+        content = _replace_ini_value(content, 'GalInfo', 'mag_cut', [0, mag_cut])
+    if crossmatch_mag_faint_cut is not None:
+        content = _replace_ini_value(
+            content, 'CrossMatch', 'mag_faint_cut', crossmatch_mag_faint_cut
+        )
+    if pixel_scale is not None:
+        content = _replace_ini_value(content, 'ImSim', 'pixel_scale_list', pixel_scale)
+        content = _replace_ini_value(content, 'SExtractor', 'pixel_scale', pixel_scale)
+    if survey is not None:
+        content = _replace_ini_value(content, 'ImSim', 'survey', survey)
 
-    output_config = path + f'sim_config_case{suffix}_{g:.1f}.ini'
+    output_config = os.path.join(path, f'sim_config_case{suffix}_{g_label}.ini')
     with open(output_config, 'w') as f:
         f.write(content)
 
