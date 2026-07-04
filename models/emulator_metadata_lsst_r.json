@@ -64,6 +64,7 @@
         "sersic_n_input_s",
         "distance_scaled"
       ],
+      "k": 2,
       "metrics": {
         "accuracy": 0.9033242599942439,
         "balanced_accuracy": 0.9032834208523846,
@@ -87,6 +88,7 @@
         "reg_lambda": 0.9463720390498181,
         "subsample": 0.959173065337887
       },
+      "r_max": 3,
       "train_curve_file": "classification_train_curve_lsst_r.npz"
     },
     "regression": {
@@ -151,6 +153,7 @@
         "sersic_n_input_s",
         "distance_scaled"
       ],
+      "k": 20,
       "metrics": {
         "best_iteration": 229,
         "best_score": 0.005448,
@@ -173,6 +176,7 @@
         "reg_lambda": 0.007432507464985067,
         "subsample": 0.9699684593953087
       },
+      "r_max": 10,
       "standardization": {
         "mean": 0.010681778358237332,
         "std": 1.0518722157225542
@@ -241,6 +245,7 @@
         "sersic_n_input_s",
         "distance_scaled"
       ],
+      "k": 2,
       "metrics": {
         "best_iteration": 1691,
         "best_score": 0.014233,
@@ -263,6 +268,7 @@
         "reg_lambda": 5.322256101965445,
         "subsample": 0.7446858665686177
       },
+      "r_max": 3,
       "standardization": {
         "mean": 0.29690309290154343,
         "std": 4.053461748826296

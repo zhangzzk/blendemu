@@ -166,6 +166,19 @@ def _update_metadata(cfg, task, model_path, features, boundary, params,
         if cut_key is not None:
             task_meta['cuts'] = _json_ready(tr.get(cut_key))
 
+        # Persist the neighbour aperture (r_max in arcsec, k) the pair catalogue
+        # was built with, so inference matches training. Map task -> catalogue set.
+        cat_set = {
+            'classification': 'detection',
+            'regression': 'response',
+            'self_response': 'self_response',
+        }.get(task)
+        cat_cfg = cfg.get('catalogues', {}).get(cat_set, {}) if cat_set else {}
+        if 'r_max' in cat_cfg:
+            task_meta['r_max'] = _json_ready(cat_cfg['r_max'])
+        if 'k' in cat_cfg:
+            task_meta['k'] = _json_ready(cat_cfg['k'])
+
         metadata.setdefault('tasks', {})[task] = task_meta
 
         tmp_path = f'{path}.{os.getpid()}.tmp'

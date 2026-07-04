@@ -35,13 +35,20 @@ class BlendingPredictor:
 
     def __init__(self, bst_cla, bst_reg, y_mean, y_std,
                  boundaries_cla=None, boundaries_reg=None, conditions=None,
-                 bst_self=None, y_mean_self=None, y_std_self=None, boundaries_self=None):
+                 bst_self=None, y_mean_self=None, y_std_self=None, boundaries_self=None,
+                 select=None):
         self.bst_cla = bst_cla
         self.bst_reg = bst_reg
         self.y_mean = y_mean
         self.y_std = y_std
         self.boundaries_cla = boundaries_cla
         self.boundaries_reg = boundaries_reg
+
+        # Per-task selection + aperture (cuts, r_max in arcsec, k) recovered from
+        # the model metadata so INFERENCE uses exactly what the emulator was
+        # TRAINED with. Missing keys -> None -> nz_utils falls back to its module
+        # defaults (legacy behaviour). See _select().
+        self.select = select or {}
 
         # Self-response (optional)
         self.bst_self = bst_self
@@ -57,6 +64,11 @@ class BlendingPredictor:
         if missing:
             raise ValueError(f"`conditions` is missing keys: {sorted(missing)}")
         self.conditions = dict(conditions)
+
+    def _select(self, task):
+        """(cuts, r_max_arcsec, k) the given emulator was trained with, or Nones."""
+        s = self.select.get(task, {})
+        return s.get('cuts'), s.get('r_max'), s.get('k')
 
     @classmethod
     def load(cls, model_dir, tag=None, conditions=None, device='cuda',
@@ -156,10 +168,16 @@ class BlendingPredictor:
             if bself is None:
                 bself = _load_optional(os.path.join(model_dir, boundary_self_file))
 
+        select = {
+            'regression': _metadata_select(meta_reg),
+            'classification': _metadata_select(meta_cla),
+            'self_response': _metadata_select(meta_self),
+        }
+
         return cls(bst_cla, bst_reg, y_mean, y_std,
                    boundaries_cla=bcla, boundaries_reg=breg, conditions=conditions,
                    bst_self=bst_self, y_mean_self=y_mean_self, y_std_self=y_std_self,
-                   boundaries_self=bself)
+                   boundaries_self=bself, select=select)
 
     def predict_detection(self, icat, warn_extrapolation=True):
         """
@@ -170,8 +188,10 @@ class BlendingPredictor:
         pd.DataFrame
             Feature DataFrame with an added 'detection_prob' column.
         """
+        _, cla_rmax, cla_k = self._select('classification')
         cla_fea = nz_utils.icat2cla(
             icat, icat, self.bst_cla, self.conditions, predict=False,
+            cla_k=cla_k if cla_k is not None else 2, r_max=cla_rmax,
         )
         if warn_extrapolation and self.boundaries_cla is not None:
             _warn_if_out_of_bounds(
@@ -185,7 +205,9 @@ class BlendingPredictor:
         Predict per-pair **blending response** (delta_et_primary / gamma due to
         sheared neighbor), de-standardized to physical units.
         """
-        reg_fea = nz_utils.icat2reg(icat_pri, icat_sec, self.bst_reg, self.conditions)
+        cuts, r_max, k = self._select('regression')
+        reg_fea = nz_utils.icat2reg(icat_pri, icat_sec, self.bst_reg, self.conditions,
+                                    cuts=cuts, r_max=r_max, k=k)
         response = data_utils.xgb_pred(self.bst_reg, reg_fea)
         reg_fea['response'] = data_utils.reverse_standardize(response, self.y_mean, self.y_std)
         return reg_fea
@@ -202,7 +224,14 @@ class BlendingPredictor:
             raise RuntimeError(
                 "No self-response emulator loaded. Check that "
                 "self_response_model_{tag}.json exists, or pass load_self=True to BlendingPredictor.load().")
-        reg_fea = nz_utils.icat2reg(icat_pri, icat_sec, self.bst_self, self.conditions)
+        # Routed through icat2reg (which drops neighbourless primaries) ON PURPOSE:
+        # the self-response training catalogue is 100% neighboured (0 isolated targets),
+        # so the emulator only ever saw target+neighbour pairs. Preserving isolated
+        # targets here would feed it NaN-neighbour inputs it never learned -> unreliable
+        # extrapolation. With the trained aperture (r_max/k below) this matches training.
+        cuts, r_max, k = self._select('self_response')
+        reg_fea = nz_utils.icat2reg(icat_pri, icat_sec, self.bst_self, self.conditions,
+                                    cuts=cuts, r_max=r_max, k=k)
         response = data_utils.xgb_pred(self.bst_self, reg_fea)
         reg_fea['self_response'] = data_utils.reverse_standardize(
             response, self.y_mean_self, self.y_std_self,
@@ -437,6 +466,19 @@ def _metadata_boundary(task_metadata):
     if boundary is None:
         return None
     return np.asarray(boundary, dtype=float)
+
+
+def _metadata_select(task_metadata):
+    """Per-task selection recovered from metadata: cuts, r_max (arcsec), k.
+
+    Any missing key -> None, which makes nz_utils fall back to its module-level
+    default (legacy behaviour) rather than raising.
+    """
+    return {
+        'cuts': task_metadata.get('cuts'),
+        'r_max': task_metadata.get('r_max'),
+        'k': task_metadata.get('k'),
+    }
 
 
 def _metadata_standardization(task_metadata):

@@ -42,10 +42,20 @@ def make_reg_features(icat1, icat2, r_min=0, r_max=99, k=30):
     return response_features
 
 
-def icat2reg(icat_i_pri, icat_i_sec, model, conditions):
-    """Prepare regression features from input catalogues."""
-    reg_features_i = make_reg_features(icat_i_pri, icat_i_sec, r_max=R_MAX, k=30)
-    reg_features_i = data_utils.source_select_reg(reg_features_i)
+def icat2reg(icat_i_pri, icat_i_sec, model, conditions, cuts=None, r_max=None, k=None):
+    """Prepare regression features from input catalogues.
+
+    cuts / r_max (arcsec) / k default to the module constants when None, but the
+    inference layer passes the values the emulator was TRAINED with (persisted in
+    the model metadata) so train and inference use identical selection + aperture.
+    """
+    r_max_deg = R_MAX if r_max is None else r_max / 3600.0
+    k = 30 if k is None else k
+    reg_features_i = make_reg_features(icat_i_pri, icat_i_sec, r_max=r_max_deg, k=k)
+    if cuts is None:
+        reg_features_i = data_utils.source_select_reg(reg_features_i)
+    else:
+        reg_features_i = data_utils.source_select_reg(reg_features_i, cuts=cuts)
     reg_features_i['distance'] *= 3600
 
     reg_features_i = data_utils.rescale(
@@ -59,11 +69,18 @@ def icat2reg(icat_i_pri, icat_i_sec, model, conditions):
     return reg_features_i
 
 
-def icat2cla(icat_i_pri, icat_i_sec, model, conditions, cla_k=2, predict=True):
-    """Prepare classification features and optionally predict detection probability."""
+def icat2cla(icat_i_pri, icat_i_sec, model, conditions, cla_k=2, predict=True, r_max=None):
+    """Prepare classification features and optionally predict detection probability.
+
+    r_max (arcsec) is the neighbour-search radius defining `neighbored`; defaults
+    to the module constant R_MAX_CLA (3") when None. No magnitude cut is applied
+    here on purpose: at inference we want a detection probability for EVERY input
+    galaxy, not just the ones passing the training selection.
+    """
+    r_max_cla = R_MAX_CLA if r_max is None else r_max / 3600.0
     reg_features_i_cla = make_reg_features(icat_i_pri, icat_i_sec, r_max=999, k=cla_k)
 
-    idx_cla = np.where(reg_features_i_cla['distance'] > R_MAX_CLA)[0]
+    idx_cla = np.where(reg_features_i_cla['distance'] > r_max_cla)[0]
     reg_features_i_cla.loc[idx_cla, CLASSIFICATION_NAMES_SEC] = np.nan
     reg_features_i_cla['neighbored'] = np.full(reg_features_i_cla.shape[0], True)
     reg_features_i_cla.loc[idx_cla, 'neighbored'] = False
