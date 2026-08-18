@@ -113,6 +113,32 @@ def rescale(dataset, pixel_rms=6, pixel_size=0.2,
     flux_input_s = mag2flux(dataset['r_input_s'], zero_mag)
     dataset['flux_ratio'] = np.log10(flux_input_p / flux_input_s)
 
+    # Compact pair coordinates used by ratio-conditioned response emulators.
+    # Work from the raw intrinsic radii and angular separation, all in arcsec,
+    # so the overlap coordinate is dimensionless and observing-condition
+    # independent.  Invalid/isolated pairs become NaN rather than +/-inf.
+    re_sum = (
+        dataset['Re_input_p'].to_numpy(dtype=float)
+        + dataset['Re_input_s'].to_numpy(dtype=float)
+    )
+    distance = dataset['distance'].to_numpy(dtype=float)
+    overlap = np.full(dataset.shape[0], np.nan, dtype=float)
+    valid_overlap = (
+        np.isfinite(re_sum) & (re_sum > 0)
+        & np.isfinite(distance) & (distance > 0)
+    )
+    overlap[valid_overlap] = np.log10(re_sum[valid_overlap] / distance[valid_overlap])
+    dataset['log10_re_sum_over_distance'] = overlap
+
+    # m = ZP - 2.5 log10(F), hence log10(F_s/F_p) = -0.4 (m_s-m_p).
+    # Using the magnitude difference avoids constructing very large/small fluxes.
+    log_flux_ratio = -0.4 * (
+        dataset['r_input_s'].to_numpy(dtype=float)
+        - dataset['r_input_p'].to_numpy(dtype=float)
+    )
+    log_flux_ratio[~np.isfinite(log_flux_ratio)] = np.nan
+    dataset['log10_flux_s_over_flux_p'] = log_flux_ratio
+
     dataset['r_input_p_scaled'] = flux2mag(flux_input_p / aperture_rms, zero_mag)
     dataset['r_input_s_scaled'] = flux2mag(flux_input_s / aperture_rms, zero_mag)
 

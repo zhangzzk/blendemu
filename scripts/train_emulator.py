@@ -368,8 +368,13 @@ def _study_storage(task, cfg):
     )
 
 
-def _load_or_create_study(task, cfg, direction):
-    """Create or load a study, serializing first-time SQLite initialization."""
+def _load_or_create_study(task, cfg, direction, pruner=None):
+    """Create or load a study, serializing first-time SQLite initialization.
+
+    `pruner` defaults to None, which preserves the historical behaviour exactly: the objectives in
+    this module never call `trial.report()` unless a pruner is explicitly wired in, so a study
+    created without one is never pruned.
+    """
     db_path = _study_db_path(task, cfg)
     study_name = _study_name(task, cfg)
     sampler = optuna.samplers.TPESampler(
@@ -386,9 +391,43 @@ def _load_or_create_study(task, cfg, direction):
             load_if_exists=True,
             direction=direction,
             sampler=sampler,
+            pruner=pruner,
         )
         fcntl.flock(lock_file, fcntl.LOCK_UN)
     return study
+
+
+class _OptunaPruneCallback(xgb.callback.TrainingCallback):
+    """Report eval-metric progress to an Optuna trial and abort trials that are clearly behind.
+
+    Installed only when a `pruner` is passed to `tune_regression`, so every existing call site keeps
+    its previous behaviour.
+
+    KNOWN BIAS, stated because it is real and not a technicality. Progress is reported against the
+    BOOSTING-ROUND index, so a small-`learning_rate` trial looks worse at round k than a large-rate
+    one purely because it climbs more slowly. `min_round` gives slow starters a runway; it does not
+    remove the bias. Judge a pruned search by whether the best value IMPROVED, and treat a very high
+    pruned fraction together with a stagnant best value as evidence of over-pruning.
+    """
+
+    def __init__(self, trial, metric_name='r2', data_name='eval', min_round=150, every=10):
+        self.trial = trial
+        self.metric_name = metric_name
+        self.data_name = data_name
+        self.min_round = min_round
+        self.every = every
+
+    def after_iteration(self, model, epoch, evals_log):
+        if epoch < self.min_round or epoch % self.every:
+            return False
+        try:
+            value = evals_log[self.data_name][self.metric_name][-1]
+        except (KeyError, IndexError):
+            return False
+        self.trial.report(float(value), epoch)
+        if self.trial.should_prune():
+            raise optuna.TrialPruned()
+        return False
 
 
 def _save_sampler(task, cfg, sampler):
@@ -399,11 +438,25 @@ def _save_sampler(task, cfg, sampler):
         pickle.dump(sampler, f)
 
 
-def tune_regression(cfg, DMtrain, DMtest, n_trials):
-    """Run Optuna hyperparameter search for regression."""
+def tune_regression(cfg, DMtrain, DMtest, n_trials, pruner=None, n_jobs=-1,
+                    optimize_callbacks=None, warmup_rounds=150, show_progress_bar=True):
+    """Run Optuna hyperparameter search for regression.
+
+    All keyword arguments default to the historical behaviour, so existing callers are unaffected:
+      pruner             None -> no pruning (the objective only reports progress when a pruner is set)
+      n_jobs             -1   -> XGBoost uses every core, as before. Lower it when several search
+                                 workers share one node, or they will oversubscribe the CPUs.
+      optimize_callbacks None -> no study callbacks. Used by parallel workers to stop once the STUDY
+                                 (not this process) has reached a target trial count.
+      warmup_rounds      150  -> no trial is pruned before this boosting round; see
+                                 `_OptunaPruneCallback` for the learning-rate bias this mitigates.
+
+    Parallel workers are safe against this study by construction: the sampler already sets
+    `constant_liar=True`, which exists precisely so concurrent workers do not propose the same point.
+    """
     def objective(trial):
         param = {
-            "n_jobs": -1, "device": "cuda", "booster": "gbtree",
+            "n_jobs": n_jobs, "device": "cuda", "booster": "gbtree",
             "verbosity": 0, "objective": "reg:squarederror",
             "disable_default_eval_metric": 1,
             "subsample": trial.suggest_float("subsample", 0.3, 1.),
@@ -417,21 +470,25 @@ def tune_regression(cfg, DMtrain, DMtest, n_trials):
         }
         custom_metric = lambda predt, dtrain: ("r2", r2_score(dtrain.get_label(), predt))
         evals_result = {}
+        callbacks = [_early_stopping_callback(cfg, 'regression', 'r2', maximize=True)]
+        if pruner is not None:
+            callbacks.append(_OptunaPruneCallback(trial, 'r2', 'eval', min_round=warmup_rounds))
         bst = xgb.train(param, DMtrain,
                         evals=[(DMtrain, "train"), (DMtest, "eval")],
                         evals_result=evals_result,
                         num_boost_round=1000, verbose_eval=False,
                         custom_metric=custom_metric, maximize=True,
-                        callbacks=[_early_stopping_callback(cfg, 'regression', 'r2', maximize=True)])
+                        callbacks=callbacks)
         ev = _metric_at_best(evals_result, bst, 'eval', 'r2')
         tr = _metric_at_best(evals_result, bst, 'train', 'r2')
         return ev - 0.6 * abs(tr - ev)
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     study_name = _study_name('regression', cfg)
-    study = _load_or_create_study('regression', cfg, direction='maximize')
+    study = _load_or_create_study('regression', cfg, direction='maximize', pruner=pruner)
     print(f"Running {n_trials} Optuna trials (study: {study_name})...")
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
+    study.optimize(objective, n_trials=n_trials, callbacks=optimize_callbacks,
+                   show_progress_bar=show_progress_bar)
 
     print(f"Best value: {study.best_value:.6f}")
     print(f"Best params: {study.best_params}")

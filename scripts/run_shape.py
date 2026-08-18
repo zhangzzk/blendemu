@@ -29,8 +29,15 @@ def shear_label(g):
     return label
 
 
-def get_shape(stamp, psf_im, scale=0.2, methods=['ngmix']):
-    """Measure shape on a single stamp using specified methods."""
+def get_shape(stamp, psf_im, scale=0.2, methods=['ngmix'], gal_cen=None):
+    """Measure shape on a single stamp using specified methods.
+
+    ``gal_cen`` is the true (row, col) sub-pixel centre of the source in the
+    stamp (0-indexed); it is forwarded to ``make_obs`` so the ngmix jacobian
+    is centred on the galaxy rather than the geometric stamp centre. This
+    removes the +0.5 px cutout-convention offset that otherwise induces a
+    coherent additive c2 ~ +0.004.
+    """
     g_galsim = np.array([-1., -1.])
     g_ngmix = np.array([-1., -1.])
 
@@ -42,7 +49,7 @@ def get_shape(stamp, psf_im, scale=0.2, methods=['ngmix']):
 
     if 'ngmix' in methods:
         try:
-            obs = shape.make_obs(stamp, psf_im, scale)
+            obs = shape.make_obs(stamp, psf_im, scale, gal_cen=gal_cen)
             g_ngmix = shape.ngmix_psf_correct(obs)['g']
         except Exception:
             pass
@@ -64,6 +71,9 @@ def main():
                              'secondaries (second half), or all.')
     parser.add_argument('--tile_name', type=str, default="tile180.0_-0.5", help='Tile name')
     parser.add_argument('--pixel_scale', type=float, default=0.2, help='Pixel scale in arcsec/pix')
+    parser.add_argument('--centering', choices=['subpixel', 'geometric'], default='subpixel',
+                        help='ngmix jacobian centre. subpixel is the current corrected default; '
+                             'geometric reproduces historical catalogues for controlled comparisons.')
 
     args = parser.parse_args()
 
@@ -76,6 +86,7 @@ def main():
     tile_name = args.tile_name
     scale = args.pixel_scale
     targets = args.targets
+    centering = args.centering
 
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
@@ -201,7 +212,18 @@ def main():
         gg = np.full((num, 4), -1.)
         for kk in range(num):
             stamp = shape.cutout(gal_im, x[kk], y[kk], stamp_size=stamp_size)
-            gg[kk, :] = get_shape(stamp, psf_im, scale=scale)
+            # True sub-pixel centre of the source in the stamp (0-indexed),
+            # matching the integer cutout convention. Centring the ngmix
+            # jacobian here (instead of the geometric centre) cancels the
+            # +0.5 px offset that induces a coherent additive c2 ~ +0.004.
+            # Fall back to the geometric centre for truncated edge stamps.
+            if centering == 'subpixel' and stamp.shape == (stamp_size, stamp_size):
+                row_cen = y[kk] - int(y[kk] - stamp_size / 2.)
+                col_cen = x[kk] - int(x[kk] - stamp_size / 2.)
+                gal_cen = (row_cen, col_cen)
+            else:
+                gal_cen = None
+            gg[kk, :] = get_shape(stamp, psf_im, scale=scale, gal_cen=gal_cen)
 
         # Save results
         shapes_cat = np.full((gal_cat_det.shape[0], 4), -1.)

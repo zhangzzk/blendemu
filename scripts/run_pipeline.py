@@ -177,6 +177,48 @@ def _set_simulation_override(sim_cfg, key, value):
             sim_cfg[set_name][key] = value
 
 
+def _constant_shear_values(sim_cfg):
+    """Signed constant-shear magnitudes to simulate (constant mode).
+
+    Returns ``[g]`` normally, or ``[g, -g]`` when ``constant_two_sided`` is set
+    (the antithetic +g / -g pair).
+    """
+    g = float(sim_cfg.get('constant_shear'))
+    if sim_cfg.get('constant_two_sided'):
+        return [g, -g]
+    return [g]
+
+
+def _constant_work_items(sim_cfg):
+    """Case/shear jobs for constant mode, drawn from the top-level simulation set.
+
+    Shaped like ``_simulation_work_items`` output so step_catalog / step_simulate /
+    shape measurement can consume either interchangeably.
+    """
+    offset = int(sim_cfg.get('case_offset', 0))
+    n_total = int(sim_cfg['n_cases'])
+    if n_total < 0:
+        raise ValueError("simulation n_cases must be non-negative")
+    items = []
+    for g in _constant_shear_values(sim_cfg):
+        items.append({
+            'case_offset': offset,
+            'n_cases': n_total,
+            'shear': g,
+            'shear_label': catalog.shear_label(g),
+            'sets': ['constant'],
+        })
+    return items
+
+
+def _mode_work_items(cfg, set_names=('response', 'self_response')):
+    """Resolve simulation work items honouring simulation.shear_mode."""
+    sim_cfg = cfg['simulation']
+    if sim_cfg.get('shear_mode', 'half') == 'constant':
+        return _constant_work_items(sim_cfg)
+    return _simulation_work_items(sim_cfg, set_names=set_names)
+
+
 # ──────────────────────────────────────────────
 # Step 1: Catalogue generation
 # ──────────────────────────────────────────────
@@ -246,9 +288,21 @@ def step_catalog(cfg):
     else:
         catalog.write_noise_file(path=out_path)
 
-    # Generate realizations for the union of configured simulation sets.
+    # Generate realizations for the union of configured simulation sets
+    # (or, in constant mode, the fixed constant shear and its optional negation).
+    shear_mode = sim_cfg.get('shear_mode', 'half')
+    if shear_mode == 'constant':
+        work_items = _constant_work_items(sim_cfg)
+        gen_kwargs = dict(
+            shear_type='constant',
+            shear_angle=float(sim_cfg.get('constant_shear_angle', 0.0)),
+        )
+    else:
+        work_items = _simulation_work_items(sim_cfg)
+        gen_kwargs = dict(shear_type='half')
+
     from tqdm import trange
-    for item in _simulation_work_items(sim_cfg):
+    for item in work_items:
         g = item['shear']
         start = item['case_offset']
         end = start + item['n_cases']
@@ -256,7 +310,8 @@ def step_catalog(cfg):
         for i in trange(start, end, desc=f"g={item['shear_label']}"):
             seed = i + 123
             df = catalog.generate_catalog_realization(
-                gal_cat, num_sim, seed, g, ra_range=ra_range, dec_range=dec_range
+                gal_cat, num_sim, seed, g, ra_range=ra_range, dec_range=dec_range,
+                **gen_kwargs,
             )
 
             fname = os.path.join(out_path, f'gals{i}_{catalog.shear_label(g)}.feather')
@@ -291,7 +346,7 @@ def step_simulate(cfg):
     t0 = time.time()
     run_sim_path = os.path.join(SCRIPT_DIR, 'run_sim.py')
     n_mpi = cl_cfg['n_mpi']
-    work_items = _simulation_work_items(sim_cfg)
+    work_items = _mode_work_items(cfg)
 
     total_batches = sum(_n_batches(item['n_cases'], n_mpi) for item in work_items)
     batch_i = 0
@@ -312,7 +367,8 @@ def step_simulate(cfg):
                 'python', run_sim_path, sim_cfg['output_path'],
                 '--case_start', str(case_start),
                 '--realizations', cl_cfg['realizations'],
-                '--shear_case', g,
+                # '=' form keeps argparse happy with negative shear labels (e.g. -0.02)
+                f'--shear_case={g}',
                 '--actions', '1,3',
                 '--loglevel', 'ERROR',
             ]
@@ -336,7 +392,7 @@ def _run_shape_measurement(cfg, targets, step_label, sim_set_name):
     t0 = time.time()
     run_shape_path = os.path.join(SCRIPT_DIR, 'run_shape.py')
     n_mpi = cl_cfg['n_mpi']
-    work_items = _simulation_work_items(sim_cfg, set_names=(sim_set_name,))
+    work_items = _mode_work_items(cfg, set_names=(sim_set_name,))
 
     total_batches = sum(_n_batches(item['n_cases'], n_mpi) for item in work_items)
     batch_i = 0
@@ -357,7 +413,8 @@ def _run_shape_measurement(cfg, targets, step_label, sim_set_name):
                 'python', run_shape_path, sim_cfg['output_path'],
                 '--case_start', str(case_start),
                 '--realizations', cl_cfg['realizations'],
-                '--shear_case', g,
+                # '=' form keeps argparse happy with negative shear labels (e.g. -0.02)
+                f'--shear_case={g}',
                 '--stamp_size', str(sm_cfg['stamp_size']),
                 '--use_pos', sm_cfg['use_pos'],
                 '--pixel_scale', str(sm_cfg['pixel_scale']),
@@ -385,6 +442,14 @@ def step_measure_secondaries(cfg):
     print("STEP 3b: Running shape measurements (secondaries)")
     print("=" * 60)
     _run_shape_measurement(cfg, targets='secondaries', step_label='Step 3b', sim_set_name='self_response')
+
+
+def step_measure_all(cfg):
+    """Step 3 (constant mode): shape measurement of all detected galaxies."""
+    print("\n" + "=" * 60)
+    print("STEP 3: Running shape measurements (all galaxies, constant shear)")
+    print("=" * 60)
+    _run_shape_measurement(cfg, targets='all', step_label='Step 3', sim_set_name='constant')
 
 
 # ──────────────────────────────────────────────
@@ -601,6 +666,143 @@ def step_self_response(cfg):
 
 
 # ──────────────────────────────────────────────
+# Step 4 (constant mode): constant-shear shape + response catalogues
+# ──────────────────────────────────────────────
+
+def step_constant_catalogs(cfg):
+    """Step 4 (constant mode): per-sign shape catalogues and, when two-sided,
+    the antithetic per-object response catalogue."""
+    print("\n" + "=" * 60)
+    print("STEP 4: Building constant-shear catalogues")
+    print("=" * 60)
+
+    from joblib import Parallel, delayed
+    from tqdm import tqdm
+
+    sim_cfg = cfg['simulation']
+    cat_cfg = cfg['catalogues']
+    sm_cfg = cfg['shape_measurement']
+    out_path = sim_cfg['output_path']
+
+    cs_cfg = cat_cfg['constant_shear']
+    shape_suffix = cs_cfg.get('shape_suffix', '_all')
+    include_isolated = bool(cs_cfg.get('include_isolated', True))
+    shape_prefix = cs_cfg.get('output_prefix', 'constant_shear_catalogue')
+    resp_prefix = cs_cfg.get('response_output_prefix', 'constant_response_catalogue')
+    r_max = cs_cfg['r_max']
+    r_min = cs_cfg.get('r_min', 0)
+    k = cs_cfg['k']
+    batch_size = cat_cfg['batch_size']
+    n_jobs = cat_cfg['n_jobs']
+
+    offset = int(sim_cfg.get('case_offset', 0))
+    n_total = int(sim_cfg['n_cases'])
+    n_batches = _n_batches(n_total, batch_size)
+    shear_labels = [catalog.shear_label(g) for g in _constant_shear_values(sim_cfg)]
+
+    t0 = time.time()
+
+    # --- Per-sign shape catalogues ---
+    for label in shear_labels:
+        print(f"\n--- Constant-shear shape catalogue (shear={label}): {n_batches} batches, "
+              f"cases={offset}..{offset + n_total - 1}, r_max={r_max}\", k={k} ---")
+        out_train = os.path.join(out_path, f'{shape_prefix}_{label}_train.feather')
+        _remove_output_glob(os.path.join(out_path, f'{shape_prefix}_{label}_[0-9]*.feather'))
+        _remove_outputs([out_train])
+
+        def _save_batch_shape(j, label=label):
+            frames = []
+            start = offset + j * batch_size
+            end = min(start + batch_size, offset + n_total)
+            for case in range(start, end):
+                try:
+                    df = response.retrieve_constant_shear(
+                        case=case, shear=label, r_max=r_max, r_min=r_min, k=k,
+                        real='real0', tile_name=sm_cfg['tile_name'], data_path=out_path,
+                        shape_suffix=shape_suffix, include_isolated=include_isolated,
+                    )
+                    frames.append(df)
+                except FileNotFoundError as e:
+                    print(f"  case {case}: {e}")
+            if frames:
+                batch = pd.concat(frames, ignore_index=True)
+                path = os.path.join(out_path, f'{shape_prefix}_{label}_{j}.feather')
+                batch.to_feather(path)
+                return path
+            return None
+
+        Parallel(n_jobs=n_jobs)(delayed(_save_batch_shape)(j) for j in range(n_batches))
+
+        parts = []
+        for j in tqdm(range(n_batches), desc=f"Merging {label}"):
+            fp = os.path.join(out_path, f'{shape_prefix}_{label}_{j}.feather')
+            if os.path.exists(fp):
+                parts.append(pd.read_feather(fp))
+        if parts:
+            whole = pd.concat(parts, ignore_index=True)
+            whole.to_feather(out_train)
+            print(f"  Shape catalogue (shear={label}): {whole.shape[0]:,} rows -> {out_train}")
+            del whole
+        else:
+            print(f"  WARNING: no shape data produced for shear={label} (shape catalogues missing?)")
+
+    # --- Antithetic response catalogue (two-sided only) ---
+    if sim_cfg.get('constant_two_sided') and len(shear_labels) == 2:
+        # The response frame is defined by the +|g| case, so pick it explicitly
+        # (independent of value order, and robust to a negative constant_shear).
+        g_mag = abs(float(sim_cfg['constant_shear']))
+        plus_label = catalog.shear_label(g_mag)
+        minus_label = catalog.shear_label(-g_mag)
+        print(f"\n--- Constant-shear response catalogue (+{plus_label}/{minus_label}): "
+              f"{n_batches} batches, cases={offset}..{offset + n_total - 1} ---")
+        resp_train = os.path.join(out_path, f'{resp_prefix}_train.feather')
+        _remove_output_glob(os.path.join(out_path, f'{resp_prefix}_[0-9]*.feather'))
+        _remove_outputs([resp_train])
+
+        def _save_batch_resp(j):
+            frames = []
+            start = offset + j * batch_size
+            end = min(start + batch_size, offset + n_total)
+            for case in range(start, end):
+                try:
+                    df = response.retrieve_constant_response(
+                        case=case, shear_cases=[plus_label, minus_label],
+                        r_max=r_max, r_min=r_min, k=k, real='real0',
+                        tile_name=sm_cfg['tile_name'], data_path=out_path,
+                        shape_suffix=shape_suffix, include_isolated=include_isolated,
+                    )
+                    frames.append(df)
+                except FileNotFoundError as e:
+                    print(f"  case {case}: {e}")
+            if frames:
+                batch = pd.concat(frames, ignore_index=True)
+                path = os.path.join(out_path, f'{resp_prefix}_{j}.feather')
+                batch.to_feather(path)
+                return path
+            return None
+
+        Parallel(n_jobs=n_jobs)(delayed(_save_batch_resp)(j) for j in range(n_batches))
+
+        parts = []
+        for j in tqdm(range(n_batches), desc="Merging response"):
+            fp = os.path.join(out_path, f'{resp_prefix}_{j}.feather')
+            if os.path.exists(fp):
+                parts.append(pd.read_feather(fp))
+        if parts:
+            whole = pd.concat(parts, ignore_index=True)
+            whole = whole[~np.isnan(whole['response'])].reset_index(drop=True)
+            whole.to_feather(resp_train)
+            print(f"  Response catalogue: {whole.shape[0]:,} rows -> {resp_train}")
+            print(f"  <response> = {whole['response'].mean():.4f}  (m = {whole['response'].mean() - 1:+.4f})")
+            print(f"  <sum_et>/2 = {whole['sum_et'].mean() / 2:+.5f}  (additive c)")
+            del whole
+        else:
+            print("  WARNING: no response data produced (shape catalogues missing?)")
+
+    print(f"\nStep 4 complete ({time.time() - t0:.0f}s)")
+
+
+# ──────────────────────────────────────────────
 # Step 5: Train XGBoost emulators (delegates to train_emulator.py)
 # ──────────────────────────────────────────────
 
@@ -640,10 +842,26 @@ STEP_MAP = {
     '5':  ('train',                step_train),
 }
 
+# Constant-shear mode reuses the step numbers but maps 3/4 to the all-galaxy
+# measurement and the combined constant-shear catalogue builder.
+CONSTANT_STEP_MAP = {
+    '1': ('catalog',           step_catalog),
+    '2': ('simulate',          step_simulate),
+    '3': ('measure_all',       step_measure_all),
+    '4': ('constant_catalogs', step_constant_catalogs),
+}
 
-def parse_steps(s):
+
+def build_step_map(shear_mode):
+    """Return the step dispatch table for the active shearing mode."""
+    return CONSTANT_STEP_MAP if shear_mode == 'constant' else STEP_MAP
+
+
+def parse_steps(s, shear_mode='half'):
     """Parse step spec: 'all', 'self_response', '1,3,5', '2-4', '3b,4b'."""
     if s.lower() == 'all':
+        if shear_mode == 'constant':
+            return ['1', '2', '3', '4']
         return ['1', '2', '3', '3b', '4', '4b', '5']
     if s.lower() == 'self_response':
         # convenience: measure secondaries + build self-response catalogue
@@ -724,19 +942,21 @@ Example:
     if args.survey is not None:
         cfg['simulation']['survey'] = args.survey
 
-    steps = parse_steps(args.steps)
+    shear_mode = cfg['simulation'].get('shear_mode', 'half')
+    step_map = build_step_map(shear_mode)
+    steps = parse_steps(args.steps, shear_mode=shear_mode)
 
     print(config_summary(cfg))
-    print(f"\n  Steps: {', '.join(f'{s} ({STEP_MAP[s][0]})' for s in steps)}")
+    print(f"\n  Steps: {', '.join(f'{s} ({step_map[s][0]})' for s in steps if s in step_map)}")
 
     t_total = time.time()
     for step_key in steps:
-        if step_key not in STEP_MAP:
-            print(f"Unknown step: {step_key}")
+        if step_key not in step_map:
+            print(f"Unknown step: {step_key} (shear_mode={shear_mode})")
             sys.exit(1)
-        _, func = STEP_MAP[step_key]
+        _, func = step_map[step_key]
         # step_train needs the original config path to pass to train_emulator.py
-        if step_key == '5':
+        if step_key == '5' and shear_mode != 'constant':
             func(cfg, args.config)
         else:
             func(cfg)

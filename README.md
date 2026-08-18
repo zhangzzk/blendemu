@@ -1,14 +1,3 @@
-```text
-                ██████╗ ██╗     ███████╗███╗   ██╗██████╗ ███████╗███╗   ███╗██╗   ██╗
-                ██╔══██╗██║     ██╔════╝████╗  ██║██╔══██╗██╔════╝████╗ ████║██║   ██║
-                ██████╔╝██║     █████╗  ██╔██╗ ██║██║  ██║█████╗  ██╔████╔██║██║   ██║
-                ██╔══██╗██║     ██╔══╝  ██║╚██╗██║██║  ██║██╔══╝  ██║╚██╔╝██║██║   ██║
-                ██████╔╝███████╗███████╗██║ ╚████║██████╔╝███████╗██║ ╚═╝ ██║╚██████╔╝
-                ╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═══╝╚═════╝ ╚══════╝╚═╝     ╚═╝ ╚═════╝
-```
-
----
-
 End-to-end weak lensing blending pipeline: **simulate → measure → train emulators → inference**.
 
 Paper: [Zhang et al. 2025, arXiv:2507.19130](https://arxiv.org/pdf/2507.19130)
@@ -33,7 +22,7 @@ Paper: [Zhang et al. 2025, arXiv:2507.19130](https://arxiv.org/pdf/2507.19130)
 | 5 | `train_emulator.py --mode {tune,train}` | Optuna hyperparameter tuning + XGBoost training |
 | **6** | **`run_inference.py`** | **Apply trained emulators to an input catalogue** |
 
-## Shear Coordinate Convention
+<!-- ## Shear Coordinate Convention
 
 Blendemu uses the usual sky spin-2 convention for generated shear and
 ellipticity-like components:
@@ -42,7 +31,7 @@ ellipticity-like components:
 (q1, q2) = q * (cos 2 theta, sin 2 theta)
 ```
 
-Generated catalogues carry `shear_component_convention = "sky_cos_sin"`.
+Generated catalogues carry `shear_component_convention = "sky_cos_sin"`. -->
 
 
 ## Setup
@@ -94,35 +83,6 @@ dndz /= dndz.sum() * (z[1] - z[0])
 _, z, delta_n = predictor.correct_nz(icat, (dndz, z))
 print(f'<z> shift: {np.trapz(delta_n * z, z):+.4f}')
 ```
-
-## Full pipeline via CLI
-
-```bash
-# End-to-end for 200 cases
-python scripts/run_pipeline.py --config configs/fs2_lsst_r.yaml --steps 1-5
-
-# Self-response branch only
-python scripts/run_pipeline.py --config configs/fs2_lsst_r.yaml --steps 3b,4b
-python scripts/train_emulator.py --config configs/fs2_lsst_r.yaml --mode tune --task self_response
-
-# Apply emulators to correct an n(z)
-python scripts/run_inference.py \
-    --config configs/fs2_lsst_r.yaml \
-    --catalogue data/example_catalog.feather \
-    --nz-file hsc_nz.fits \
-    --output corrected_nz.fits
-```
-
-For detection/classification training, make sure
-`training.classification_cuts[1][1]` reaches the faint limit of the catalogue
-you will run inference on (`catalog.mag_cut`). XGBoost does not extrapolate a
-survey-depth rolloff beyond the magnitude range it saw during training.
-
-Training writes `models/emulator_metadata_<tag>.json`, which keeps the task
-model filenames, feature boundaries, y-standardization, training parameters,
-and summary metrics in one sidecar file. New training runs no longer emit the
-old boundary/standardization `.npy` sidecars; `BlendingPredictor.load()` only
-keeps `.npy` fallback support for older external model directories.
 
 ## Dependencies
 

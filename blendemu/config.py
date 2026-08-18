@@ -33,6 +33,14 @@ DEFAULTS = {
         'area_deg2': None,      # optional generated-catalogue sky area for small smoke runs
         'survey': None,         # optional override for [ImSim] survey in base_config
         'max_galaxies_per_realization': None,  # smoke-test cap; None keeps catalogue density
+        # --- Shearing mode ---
+        # 'half'     : legacy half-shearing (first half unsheared primaries,
+        #              second half sheared secondaries with random orientations).
+        # 'constant' : all galaxies sheared by one fixed shear (constant-shear mode).
+        'shear_mode': 'half',
+        'constant_shear': 0.02,        # constant mode: applied shear magnitude
+        'constant_shear_angle': 0.0,   # constant mode: fixed direction (radians; 0 -> pure g1)
+        'constant_two_sided': False,   # constant mode: also simulate the negated shear
     },
 
     # --- Noise & PSF ---
@@ -74,6 +82,16 @@ DEFAULTS = {
             'r_max': 3.0,           # arcsec
             'r_min': 0.0,           # arcsec
             'k': 2,
+        },
+        # Constant-shear mode (simulation.shear_mode == 'constant').
+        'constant_shear': {
+            'r_max': 10,            # arcsec, nearest-neighbor search for each detected galaxy
+            'r_min': 0,
+            'k': 5,                 # only the closest neighbor is kept; query a few for robustness
+            'include_isolated': True,   # keep detected galaxies with no neighbor inside r_max
+            'shape_suffix': '_all',     # matches run_shape.py --targets=all
+            'output_prefix': 'constant_shear_catalogue',
+            'response_output_prefix': 'constant_response_catalogue',
         },
         'batch_size': 100,
         'n_jobs': 16,
@@ -330,15 +348,28 @@ def config_summary(cfg):
         shear_values = section.get('shear_values', section.get('shear_cases'))
         return f"  {name}: cases {start}..{end}, shear {shear_values}"
 
+    shear_mode = sim_cfg.get('shear_mode', 'half')
     lines = [
         "blendemu configuration",
         "=" * 50,
         f"  Catalogue:   {cfg['catalog']['type']} ({os.path.basename(cfg['catalog']['path'])})",
         f"  Output:      {sim_cfg['output_path']}",
-        _sim_set_summary('response'),
-        _sim_set_summary('self_response'),
-        f"  Pixel scale: {sim_cfg['pixel_scale']} arcsec/pix",
+        f"  Shear mode:  {shear_mode}",
     ]
+    if shear_mode == 'constant':
+        start, n_cases = simulation_case_window(sim_cfg, label='simulation')
+        g = float(sim_cfg.get('constant_shear'))
+        two_sided = bool(sim_cfg.get('constant_two_sided'))
+        signs = f"±{g:g}" if two_sided else f"{g:g}"
+        lines.append(
+            f"  Constant:    cases {start}..{start + n_cases - 1}, shear {signs}, "
+            f"angle {float(sim_cfg.get('constant_shear_angle', 0.0)):g} rad, "
+            f"two_sided={two_sided}"
+        )
+    else:
+        lines.append(_sim_set_summary('response'))
+        lines.append(_sim_set_summary('self_response'))
+    lines.append(f"  Pixel scale: {sim_cfg['pixel_scale']} arcsec/pix")
     if sim_cfg.get('max_galaxies_per_realization'):
         lines.append(
             f"  Galaxy cap:  {sim_cfg['max_galaxies_per_realization']:,} per realization"

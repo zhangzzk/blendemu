@@ -258,10 +258,23 @@ def write_noise_file_from_csv(noise_csv_path=FS2_NOISE_CSV, band='LSST_r',
     print(f"  Band: {band}, RMS={rms:.3f}, seeing={seeing:.3f}\", beta={beta:.3f}")
 
 
-def generate_catalog_realization(gal_cat, num_sim, seed, g, shear_type='constant',
-                                 ra_range=(180.0, 181.0), dec_range=(0.0, 1.0)):
+def generate_catalog_realization(gal_cat, num_sim, seed, g, shear_type='half',
+                                 ra_range=(180.0, 181.0), dec_range=(0.0, 1.0),
+                                 shear_angle=0.0):
     """
     Generate one realization of a galaxy catalogue with random sampling and applied shear.
+
+    Two shearing modes are supported:
+
+    - ``'half'`` (default): the first half of the galaxies are left unsheared
+      ("primaries") and the second half are sheared with a fixed magnitude ``g``
+      and a *random per-galaxy* orientation ("secondaries"). This is the legacy
+      half-shearing mode the blending-response pipeline is built around.
+    - ``'constant'``: *all* galaxies are sheared by the same fixed shear, with
+      magnitude ``g`` and a single fixed direction ``shear_angle``. Used by the
+      constant-shear simulation mode. The sign of ``g`` flips the shear, which is
+      how the optional antithetic ``+g`` / ``-g`` pair is produced (call twice
+      with the same ``seed`` and opposite ``g``).
 
     Parameters
     ----------
@@ -270,11 +283,19 @@ def generate_catalog_realization(gal_cat, num_sim, seed, g, shear_type='constant
     num_sim : int
         Number of galaxies (should be even).
     seed : int
-        Random seed.
+        Random seed. The galaxy sample, positions, and (in ``'half'`` mode)
+        random orientations are all drawn from this seed, so two calls that
+        share a seed produce identical galaxies.
     g : float
-        Shear magnitude applied to secondary half.
+        Shear magnitude. In ``'half'`` mode it is applied to the secondary half;
+        in ``'constant'`` mode it is applied (signed) to every galaxy.
     shear_type : str
-        'constant' applies shear to the second half with random orientations.
+        ``'half'`` (legacy half-shearing) or ``'constant'`` (all galaxies, fixed
+        shear).
+    shear_angle : float
+        Fixed shear direction in radians, used only in ``'constant'`` mode
+        (default ``0.0`` → pure ``g1``). No random number is drawn for it, so the
+        galaxy draw is identical between a ``+g`` / ``-g`` antithetic pair.
 
     Returns
     -------
@@ -296,10 +317,17 @@ def generate_catalog_realization(gal_cat, num_sim, seed, g, shear_type='constant
     dec_CAT = rng.uniform(low=dec_range[0], high=dec_range[1], size=num_sim)
 
     g_CAT = np.zeros((num_sim, 2))
-    if shear_type == 'constant':
+    if shear_type == 'half':
         angles = rng.uniform(low=0, high=np.pi, size=int(num_sim / 2))
         g_CAT[int(num_sim / 2):, 0] = g * np.cos(2 * angles)
         g_CAT[int(num_sim / 2):, 1] = g * np.sin(2 * angles)
+    elif shear_type == 'constant':
+        g_CAT[:, 0] = g * np.cos(2 * shear_angle)
+        g_CAT[:, 1] = g * np.sin(2 * shear_angle)
+    else:
+        raise ValueError(
+            f"Unknown shear_type {shear_type!r}; expected 'half' or 'constant'"
+        )
 
     cat = {
         'index': np.arange(0, num_sim),

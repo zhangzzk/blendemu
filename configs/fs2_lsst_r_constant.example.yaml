@@ -1,0 +1,58 @@
+# blendemu pipeline configuration — example
+# FS2 catalogue, LSST r-band only, CONSTANT-SHEAR mode
+#
+# Copy this file to `fs2_lsst_r_constant.yaml` (gitignored) and fill in the
+# paths for your own environment.
+#
+# In constant-shear mode all galaxies receive one fixed shear. With
+# `constant_two_sided: true` the pipeline simulates the same galaxies twice —
+# at +shear and -shear (same seed, same noise, opposite shear) — and produces:
+#   - two per-detected-galaxy shape catalogues (one per sign), and
+#   - one antithetic response catalogue (per-object response + m/c bias).
+# ---
+
+catalog:
+  type: fs2
+  path: /path/to/FS2_catalog.feather        # base FS2 catalogue
+  mag_column: lsst_r_mag
+  mag_cut: 27
+  re_convention: circularized
+
+simulation:
+  output_path: /path/to/sim_outputs_constant/   # where sim images + catalogues are written
+  base_config: base_sim_config.ini              # relative to this YAML file
+  n_cases: 200
+  case_offset: 0
+  pixel_scale: 0.2
+  # --- constant-shear mode ---
+  shear_mode: constant
+  constant_shear: 0.02            # applied shear magnitude
+  constant_shear_angle: 0.0       # radians; fixed direction (0 -> pure g1)
+  constant_two_sided: true        # also simulate the negated shear (-g)
+
+noise:
+  source: csv
+  csv_path: /path/to/noise_params.csv       # multi-survey noise parameter CSV
+  band: LSST_r
+
+shape_measurement:
+  stamp_size: 48
+  pixel_scale: 0.2
+  use_pos: detect
+  tile_name: tile180.0_-0.5
+
+catalogues:
+  constant_shear:
+    r_max: 10              # arcsec, nearest-neighbor search
+    r_min: 0
+    k: 5
+    include_isolated: true
+    shape_suffix: _all
+    output_prefix: constant_shear_catalogue
+    response_output_prefix: constant_response_catalogue
+  batch_size: 100
+  n_jobs: 16
+
+cluster:
+  n_mpi: 50
+  realizations: "d,0,1"

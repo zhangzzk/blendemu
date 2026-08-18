@@ -87,7 +87,7 @@ def _get_prior(rng, scale):
     return prior
 
 
-def make_obs(im, psf_im, scale):
+def make_obs(im, psf_im, scale, gal_cen=None):
     """
     Create an ngmix Observation from galaxy and PSF images.
 
@@ -101,12 +101,22 @@ def make_obs(im, psf_im, scale):
         PSF image.
     scale : float
         Pixel scale in arcsec/pixel.
+    gal_cen : (row, col) or None, optional
+        Sub-pixel centre (0-indexed pixel coordinates in the stamp) of the
+        galaxy jacobian. If None (default) the geometric stamp centre
+        ``(n - 1) / 2`` is used, preserving the historical behaviour.
 
-    Returns
-    -------
-    ngmix.Observation
+        The cutout places a source at 1-indexed image position ``(x, y)`` at
+        0-indexed stamp position ``row = y - int(y - stamp/2)``,
+        ``col = x - int(x - stamp/2)`` (see ``cutout``). That is ~frac+0.5
+        (mean ~1 px) away from the geometric centre, which leaves a coherent
+        additive shear (c2 ~ +0.004). Passing the true ``(row, col)`` here
+        cancels that offset per-galaxy and drives the additive to zero.
     """
-    cen = (np.array(im.shape) - 1.0) / 2.0
+    if gal_cen is None:
+        cen = (np.array(im.shape) - 1.0) / 2.0
+    else:
+        cen = np.asarray(gal_cen, dtype=float)
     psf_cen = (np.array(psf_im.shape) - 1.0) / 2.0
 
     jacobian = ngmix.DiagonalJacobian(row=cen[0], col=cen[1], scale=scale)

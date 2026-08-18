@@ -1,0 +1,510 @@
+{
+  "format_version": 1,
+  "tag": "lsst_r_extnbr_v22_g005_c200",
+  "tasks": {
+    "classification": {
+      "boundary": [
+        [
+          0.1865010451781354,
+          0.9435082120956629
+        ],
+        [
+          0.01993310742410843,
+          0.9986153751620044
+        ],
+        [
+          20.081809432462975,
+          30.081260116056725
+        ],
+        [
+          13.224486739591882,
+          31.081260116056725
+        ],
+        [
+          0.5127088630200495,
+          5.851273922453501
+        ],
+        [
+          0.5127088630200495,
+          5.851273922453501
+        ],
+        [
+          0.0007824812428010058,
+          5.594532512862638
+        ]
+      ],
+      "cuts": [
+        [
+          18,
+          28
+        ],
+        [
+          18,
+          28
+        ],
+        [
+          0.1,
+          1.5
+        ],
+        [
+          0.1,
+          1.5
+        ],
+        [
+          0,
+          3
+        ]
+      ],
+      "features": [
+        "Re_input_p_scaled",
+        "Re_input_s_scaled",
+        "r_input_p_scaled",
+        "r_input_s_scaled",
+        "sersic_n_input_p",
+        "sersic_n_input_s",
+        "distance_scaled"
+      ],
+      "k": 2,
+      "metrics": {
+        "accuracy": 0.9033242599942439,
+        "balanced_accuracy": 0.9032834208523846,
+        "best_iteration": 130,
+        "best_score": 0.24613624925947422,
+        "best_trees": 131,
+        "score_name": "logloss"
+      },
+      "model_file": "classification_model_lsst_r_extnbr_ho.json",
+      "params": {
+        "booster": "gbtree",
+        "colsample_bytree": 0.9556674659210342,
+        "device": "cuda",
+        "gamma": 0.017059395190662907,
+        "learning_rate": 0.16154830815056245,
+        "max_depth": 9,
+        "min_child_weight": 161,
+        "n_jobs": -1,
+        "objective": "binary:logistic",
+        "reg_alpha": 0.003239447934442709,
+        "reg_lambda": 0.9463720390498181,
+        "subsample": 0.959173065337887
+      },
+      "r_max": 3,
+      "train_curve_file": "classification_train_curve_lsst_r.npz"
+    },
+    "regression": {
+      "boundary": [
+        [
+          0.6884285530011669,
+          0.943508073110227
+        ],
+        [
+          0.01993310742410843,
+          0.9986153664992028
+        ],
+        [
+          20.081809432462975,
+          27.881263167814538
+        ],
+        [
+          17.231311233000085,
+          31.081260116056725
+        ],
+        [
+          0.5127088630200495,
+          5.851273922453501
+        ],
+        [
+          0.5127088630200495,
+          5.851273922453501
+        ],
+        [
+          0.006459903990760738,
+          13.767137502020807
+        ]
+      ],
+      "cuts": [
+        [
+          13,
+          29
+        ],
+        [
+          18,
+          25.8
+        ],
+        [
+          0.0,
+          10.0
+        ],
+        [
+          0.5,
+          1.5
+        ],
+        [
+          0,
+          10
+        ]
+      ],
+      "features": [
+        "Re_input_p_scaled",
+        "Re_input_s_scaled",
+        "r_input_p_scaled",
+        "r_input_s_scaled",
+        "sersic_n_input_p",
+        "sersic_n_input_s",
+        "distance_scaled"
+      ],
+      "k": 20,
+      "metrics": {
+        "best_iteration": 201,
+        "best_score": 0.000759,
+        "best_trees": 202,
+        "heldout_cases": [],
+        "params_inherited_from": "lsst_r_extnbr_v22",
+        "raw_training_rows": 250368296,
+        "response_shear": 0.05,
+        "row_validation_rows": 9492670,
+        "sbsi_domain": {
+          "domain": "v2.2",
+          "primary_mag_max": 25.8,
+          "primary_re_min_arcsec": 0.5
+        },
+        "score_name": "r2",
+        "selected_training_rows": 47463348,
+        "source_catalogues": [
+          "/project/ls-gruen/users/zekang.zhang/lsst_sims_fs2_25876/response_catalogue_g005_train.feather",
+          "/project/ls-gruen/users/zekang.zhang/lsst_sims_fs2_25876/response_catalogue_g005_c100-199.feather"
+        ],
+        "train_rows": 37970678,
+        "training_cases": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136,
+          137,
+          138,
+          139,
+          140,
+          141,
+          142,
+          143,
+          144,
+          145,
+          146,
+          147,
+          148,
+          149,
+          150,
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157,
+          158,
+          159,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          174,
+          175,
+          176,
+          177,
+          178,
+          179,
+          180,
+          181,
+          182,
+          183,
+          184,
+          185,
+          186,
+          187,
+          188,
+          189,
+          190,
+          191,
+          192,
+          193,
+          194,
+          195,
+          196,
+          197,
+          198,
+          199
+        ],
+        "uncertainty_unit": "case"
+      },
+      "model_file": "regression_model_lsst_r_extnbr_v22_g005_c200.json",
+      "params": {
+        "booster": "gbtree",
+        "colsample_bytree": 0.9801141338727593,
+        "device": "cpu",
+        "disable_default_eval_metric": 1,
+        "gamma": 3.998163258286566,
+        "learning_rate": 0.025150914825693486,
+        "max_depth": 8,
+        "min_child_weight": 181,
+        "n_jobs": -1,
+        "objective": "reg:squarederror",
+        "reg_alpha": 0.002305343603936417,
+        "reg_lambda": 0.7037806884244237,
+        "subsample": 0.9474434509427369,
+        "tree_method": "hist"
+      },
+      "r_max": 10,
+      "standardization": {
+        "mean": 0.007307646880775482,
+        "std": 2.4674218093459523
+      },
+      "train_curve_file": "regression_train_curve_lsst_r_extnbr_v22_g005_c200.npz"
+    },
+    "self_response": {
+      "boundary": [
+        [
+          0.1865010451781354,
+          0.943508073110227
+        ],
+        [
+          0.18650117904563474,
+          0.9435074774760231
+        ],
+        [
+          20.085349471525475,
+          30.08122196908407
+        ],
+        [
+          20.340056807951257,
+          30.081260116056725
+        ],
+        [
+          0.5127088630200495,
+          5.851273922453501
+        ],
+        [
+          0.5127088630200495,
+          5.851273922453501
+        ],
+        [
+          0.0007824812428010058,
+          5.594513971748164
+        ]
+      ],
+      "cuts": [
+        [
+          18,
+          28
+        ],
+        [
+          18,
+          28
+        ],
+        [
+          0.1,
+          1.5
+        ],
+        [
+          0.1,
+          1.5
+        ],
+        [
+          0,
+          3
+        ]
+      ],
+      "features": [
+        "Re_input_p_scaled",
+        "Re_input_s_scaled",
+        "r_input_p_scaled",
+        "r_input_s_scaled",
+        "sersic_n_input_p",
+        "sersic_n_input_s",
+        "distance_scaled"
+      ],
+      "k": 2,
+      "metrics": {
+        "best_iteration": 1691,
+        "best_score": 0.014233,
+        "best_trees": 1692,
+        "score_name": "r2"
+      },
+      "model_file": "self_response_model_lsst_r_extnbr_ho.json",
+      "params": {
+        "booster": "gbtree",
+        "colsample_bytree": 0.9355765310192693,
+        "device": "cuda",
+        "disable_default_eval_metric": 1,
+        "gamma": 4.255485054536232,
+        "learning_rate": 0.005581786891082725,
+        "max_depth": 5,
+        "min_child_weight": 188,
+        "n_jobs": -1,
+        "objective": "reg:squarederror",
+        "reg_alpha": 0.00663433080310004,
+        "reg_lambda": 5.322256101965445,
+        "subsample": 0.7446858665686177
+      },
+      "r_max": 3,
+      "standardization": {
+        "mean": 0.29690309290154343,
+        "std": 4.053461748826296
+      },
+      "train_curve_file": "self_response_train_curve_lsst_r.npz"
+    }
+  },
+  "training": {
+    "random_state": 321,
+    "rescale": {
+      "moffat_beta": 2.224,
+      "pixel_rms": 0.312,
+      "pixel_size": 0.2,
+      "psf_fwhm": 0.73,
+      "zero_mag": 30
+    },
+    "test_size": 0.2
+  }
+}
