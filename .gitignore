@@ -10,6 +10,7 @@ configs/*.yaml
 !configs/*.example.yaml
 jobs/*.sh
 !jobs/*.example.sh
+tests/
 
 # Notebooks: only the tutorial is tracked
 notebooks/*.ipynb
