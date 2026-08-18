@@ -112,6 +112,13 @@ DEFAULTS = {
         },
         'test_size': 0.2,
         'random_state': 321,
+        # V3 blending-response strategy: cases are split into a fit window
+        # (model development; the official random-row train/validation split is
+        # taken over these rows only) and a case-disjoint development window
+        # used exclusively by the vector-slope tuning score. Defaults match the
+        # 200-case FS2 response catalogues.
+        'regression_fit_cases': [40, 199],
+        'regression_dev_cases': [0, 39],
         # Early stopping counts only improvements larger than min_delta.
         # Classification often has tiny late logloss gains, so give it a
         # task-specific threshold to avoid training hundreds of cosmetic trees.

@@ -50,6 +50,11 @@ training:
   model_tag: lsst_r                         # appended to saved model filenames
   n_trials: 200
   regression_cuts:      [[18, 26], [18, 26], [0.1, 1.5], [0.1, 1.5], [0, 7]]
+  # V3 blending-response strategy: fit cases are the model-development
+  # population (official random-row train/validation split); dev cases are
+  # case-disjoint and only used by the vector-slope tuning score.
+  regression_fit_cases: [40, 199]
+  regression_dev_cases: [0, 39]
   self_response_cuts:   [[18, 28], [18, 26], [0.05, 3.0], [0.1, 1.5], [0, 10]]
   classification_cuts:  [[18, 27], [18, 27], [0.1, 1.5], [0.1, 1.5], [0, 5]]
   rescale:
