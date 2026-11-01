@@ -383,7 +383,7 @@ def step_simulate(cfg):
             ]
             result = subprocess.run(cmd)
             if result.returncode != 0:
-                print(f"  WARNING: srun returned {result.returncode}")
+                raise RuntimeError(f"srun returned {result.returncode}")
 
     print(f"\nStep 2 complete ({time.time() - t0:.0f}s)")
 
@@ -433,7 +433,7 @@ def _run_shape_measurement(cfg, targets, step_label, sim_set_name):
             ]
             result = subprocess.run(cmd)
             if result.returncode != 0:
-                print(f"  WARNING: srun returned {result.returncode}")
+                raise RuntimeError(f"srun returned {result.returncode}")
 
     print(f"\n{step_label} complete ({time.time() - t0:.0f}s)")
 

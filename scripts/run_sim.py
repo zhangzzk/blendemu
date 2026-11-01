@@ -102,6 +102,8 @@ def main():
             result1 = subprocess.run(cmd, capture_output=True, text=True)
             if result1.stderr:
                 print(f"[Rank {rank} | Case {case} | Sim]: {result1.stderr}")
+            if result1.returncode != 0:
+                raise RuntimeError(f"Case {case} {real}: Sim exited with {result1.returncode}")
 
         if '3' in actions:
             cmd = [
@@ -117,6 +119,8 @@ def main():
             result2 = subprocess.run(cmd, capture_output=True, text=True)
             if result2.stderr:
                 print(f"[Rank {rank} | Case {case} | SExtractor]: {result2.stderr}")
+            if result2.returncode != 0:
+                raise RuntimeError(f"Case {case} {real}: SExtractor exited with {result2.returncode}")
 
 
 if __name__ == "__main__":
