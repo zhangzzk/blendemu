@@ -60,6 +60,7 @@ DEFAULTS = {
         'pixel_scale': 0.2,
         'use_pos': 'detect',    # 'true', 'detect', 'real0_detect', 'noshear'
         'tile_name': 'tile180.0_-0.5',
+        'centering': 'subpixel',  # 'subpixel', 'geometric', 'centred' (odd stamp)
     },
 
     # --- Catalogue generation (step 4) ---

@@ -252,6 +252,25 @@ def cutout(image, x_source, y_source, stamp_size=None,
     ]
 
 
+def centred_cutout(image, x_source, y_source, stamp_size):
+    """
+    Odd stamp centred on the pixel nearest the source, so the sky around the
+    source is the same on every side (the even ``cutout`` window is lopsided
+    by 0.5-1.5 px, which induces a mean e2 for faint galaxies).
+
+    Returns the stamp (truncated at image edges) and the 0-indexed
+    (row, col) source position in a full stamp. Positions are 1-indexed,
+    as in ``cutout``.
+    """
+    if stamp_size % 2 != 1:
+        raise ValueError("centred_cutout needs an odd stamp_size")
+    half = stamp_size // 2
+    r0 = int(np.rint(y_source - 1)) - half
+    c0 = int(np.rint(x_source - 1)) - half
+    stamp = image[max(r0, 0):r0 + stamp_size, max(c0, 0):c0 + stamp_size]
+    return stamp, ((y_source - 1) - r0, (x_source - 1) - c0)
+
+
 # --- Shear utilities ---
 
 def angle2e(theta, axis_ratio):

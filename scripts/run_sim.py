@@ -95,7 +95,7 @@ def main():
                 "--shear_columns", "g1", "g2",
                 "--config", os.path.join(path, config_name),
                 "--threads", "1",
-                "--rng_seed", str(i),
+                "--rng_seed", str(1000 * case + i),  # per case; both shear legs share it
                 "--loglevel", loglevel,
                 "--sep_running_log",
             ]
@@ -110,7 +110,7 @@ def main():
                 "--shear_columns", "g1", "g2",
                 "--config", os.path.join(path, config_name),
                 "--threads", "1",
-                "--rng_seed", str(i),
+                "--rng_seed", str(1000 * case + i),  # per case; both shear legs share it
                 "--loglevel", loglevel,
                 "--sep_running_log",
             ]

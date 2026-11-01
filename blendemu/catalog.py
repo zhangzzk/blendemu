@@ -316,18 +316,7 @@ def generate_catalog_realization(gal_cat, num_sim, seed, g, shear_type='half',
     ra_CAT = rng.uniform(low=ra_range[0], high=ra_range[1], size=num_sim)
     dec_CAT = rng.uniform(low=dec_range[0], high=dec_range[1], size=num_sim)
 
-    g_CAT = np.zeros((num_sim, 2))
-    if shear_type == 'half':
-        angles = rng.uniform(low=0, high=np.pi, size=int(num_sim / 2))
-        g_CAT[int(num_sim / 2):, 0] = g * np.cos(2 * angles)
-        g_CAT[int(num_sim / 2):, 1] = g * np.sin(2 * angles)
-    elif shear_type == 'constant':
-        g_CAT[:, 0] = g * np.cos(2 * shear_angle)
-        g_CAT[:, 1] = g * np.sin(2 * shear_angle)
-    else:
-        raise ValueError(
-            f"Unknown shear_type {shear_type!r}; expected 'half' or 'constant'"
-        )
+    g_CAT = _shear_columns(rng, num_sim, g, shear_type, shear_angle)
 
     cat = {
         'index': np.arange(0, num_sim),
@@ -345,6 +334,58 @@ def generate_catalog_realization(gal_cat, num_sim, seed, g, shear_type='half',
         'r': mag_CAT,
     }
     return pd.DataFrame(data=cat)
+
+
+def _shear_columns(rng, num_sim, g, shear_type, shear_angle):
+    """Per-galaxy (g1, g2) for the 'half' or 'constant' shear mode.
+
+    In 'half' mode rows [num_sim // 2:] are the sheared secondaries.
+    """
+    g_CAT = np.zeros((num_sim, 2))
+    if shear_type == 'half':
+        half = num_sim // 2
+        angles = rng.uniform(low=0, high=np.pi, size=num_sim - half)
+        g_CAT[half:, 0] = g * np.cos(2 * angles)
+        g_CAT[half:, 1] = g * np.sin(2 * angles)
+    elif shear_type == 'constant':
+        g_CAT[:, 0] = g * np.cos(2 * shear_angle)
+        g_CAT[:, 1] = g * np.sin(2 * shear_angle)
+    else:
+        raise ValueError(
+            f"Unknown shear_type {shear_type!r}; expected 'half' or 'constant'"
+        )
+    return g_CAT
+
+
+def load_scene(scene_dir, case):
+    """Read one SBSI-written scene (``scene{case}.feather``) as it is.
+
+    The scene already holds every galaxy of the case at its position, with
+    Re (semi-major half-light radius, arcsec), axis_ratio, position_angle
+    (degrees, GalSim beta), sersic_n, redshift and the magnitude column 'r'.
+    Nothing is resampled or cut here.
+    """
+    scene = pd.read_feather(os.path.join(scene_dir, f'scene{case}.feather'))
+    clash = {'index', 'cata_idx', 'g1', 'g2', 'shear_component_convention'} & set(scene.columns)
+    if clash:
+        raise ValueError(f"scene{case} has reserved columns {sorted(clash)}")
+    return scene
+
+
+def scene_realization(scene, seed, g, shear_type='half', shear_angle=0.0):
+    """Apply one shear leg to a fixed scene; same shear rule as
+    ``generate_catalog_realization`` (scene rows keep their order)."""
+    num_sim = len(scene)
+    rng = np.random.RandomState(seed)
+    g_CAT = _shear_columns(rng, num_sim, g, shear_type, shear_angle)
+    cat = pd.DataFrame({
+        'index': np.arange(0, num_sim),
+        'cata_idx': np.arange(0, num_sim),
+        'g1': g_CAT[:, 0],
+        'g2': g_CAT[:, 1],
+        'shear_component_convention': np.full(num_sim, SHEAR_COMPONENT_CONVENTION),
+    })
+    return pd.concat([cat, scene.reset_index(drop=True)], axis=1)
 
 
 def write_config_file(suffix, g, path=OUTPUT_PATH,

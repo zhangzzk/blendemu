@@ -235,7 +235,10 @@ def step_catalog(cfg):
     t0 = time.time()
 
     # Load base catalogue
-    if cat_cfg['type'] == 'fs2':
+    scene_dir = None
+    if cat_cfg['type'] == 'sbsi_scene':
+        scene_dir = cat_cfg['path']  # one fixed scene per case, read in the loop below
+    elif cat_cfg['type'] == 'fs2':
         gal_cat, n_degree2 = catalog.load_fs2_catalog(
             path=cat_cfg['path'],
             mag_col=cat_cfg.get('mag_column', 'lsst_r_mag'),
@@ -246,34 +249,37 @@ def step_catalog(cfg):
     else:
         raise ValueError(f"Unknown catalog type: {cat_cfg['type']}")
 
-    area_deg2 = sim_cfg.get('area_deg2')
-    ra_range = (180.0, 181.0)
-    dec_range = (0.0, 1.0)
-    if area_deg2 is not None:
-        area_deg2 = float(area_deg2)
-        if area_deg2 <= 0:
-            raise ValueError("simulation.area_deg2 must be positive")
-        side_deg = area_deg2 ** 0.5
-        ra_range = (180.0, 180.0 + side_deg)
-        dec_range = (0.0, side_deg)
-        num_sim = int(n_degree2 * area_deg2 / 2) * 2
-        print(
-            f"Generated sky area: {area_deg2:g} deg^2 "
-            f"(RA {ra_range[0]:.6f}..{ra_range[1]:.6f}, "
-            f"Dec {dec_range[0]:.6f}..{dec_range[1]:.6f})"
-        )
+    if scene_dir is None:
+        area_deg2 = sim_cfg.get('area_deg2')
+        ra_range = (180.0, 181.0)
+        dec_range = (0.0, 1.0)
+        if area_deg2 is not None:
+            area_deg2 = float(area_deg2)
+            if area_deg2 <= 0:
+                raise ValueError("simulation.area_deg2 must be positive")
+            side_deg = area_deg2 ** 0.5
+            ra_range = (180.0, 180.0 + side_deg)
+            dec_range = (0.0, side_deg)
+            num_sim = int(n_degree2 * area_deg2 / 2) * 2
+            print(
+                f"Generated sky area: {area_deg2:g} deg^2 "
+                f"(RA {ra_range[0]:.6f}..{ra_range[1]:.6f}, "
+                f"Dec {dec_range[0]:.6f}..{dec_range[1]:.6f})"
+            )
+        else:
+            num_sim = int(n_degree2 / 2) * 2
+        max_galaxies = sim_cfg.get('max_galaxies_per_realization')
+        if max_galaxies is not None:
+            max_galaxies = int(max_galaxies)
+            if max_galaxies < 2:
+                raise ValueError("simulation.max_galaxies_per_realization must be >= 2")
+            capped = min(num_sim, max_galaxies)
+            num_sim = int(capped / 2) * 2
+            print(f"Galaxies per realization: {num_sim:,} (capped for smoke/testing)")
+        else:
+            print(f"Galaxies per realization: {num_sim:,}")
     else:
-        num_sim = int(n_degree2 / 2) * 2
-    max_galaxies = sim_cfg.get('max_galaxies_per_realization')
-    if max_galaxies is not None:
-        max_galaxies = int(max_galaxies)
-        if max_galaxies < 2:
-            raise ValueError("simulation.max_galaxies_per_realization must be >= 2")
-        capped = min(num_sim, max_galaxies)
-        num_sim = int(capped / 2) * 2
-        print(f"Galaxies per realization: {num_sim:,} (capped for smoke/testing)")
-    else:
-        print(f"Galaxies per realization: {num_sim:,}")
+        print(f"Fixed SBSI scenes from {scene_dir} (no resampling, no cuts)")
 
     # Write noise file
     out_path = sim_cfg['output_path']
@@ -309,10 +315,13 @@ def step_catalog(cfg):
         print(f"\nShear g={item['shear_label']} ({'+'.join(item['sets'])}), cases {start}..{end - 1}:")
         for i in trange(start, end, desc=f"g={item['shear_label']}"):
             seed = i + 123
-            df = catalog.generate_catalog_realization(
-                gal_cat, num_sim, seed, g, ra_range=ra_range, dec_range=dec_range,
-                **gen_kwargs,
-            )
+            if scene_dir is not None:
+                df = catalog.scene_realization(catalog.load_scene(scene_dir, i), seed, g, **gen_kwargs)
+            else:
+                df = catalog.generate_catalog_realization(
+                    gal_cat, num_sim, seed, g, ra_range=ra_range, dec_range=dec_range,
+                    **gen_kwargs,
+                )
 
             fname = os.path.join(out_path, f'gals{i}_{catalog.shear_label(g)}.feather')
             df.to_feather(fname)
@@ -420,6 +429,7 @@ def _run_shape_measurement(cfg, targets, step_label, sim_set_name):
                 '--pixel_scale', str(sm_cfg['pixel_scale']),
                 '--tile_name', sm_cfg['tile_name'],
                 '--targets', targets,
+                '--centering', sm_cfg['centering'],
             ]
             result = subprocess.run(cmd)
             if result.returncode != 0:

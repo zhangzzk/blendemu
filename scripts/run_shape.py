@@ -71,9 +71,10 @@ def main():
                              'secondaries (second half), or all.')
     parser.add_argument('--tile_name', type=str, default="tile180.0_-0.5", help='Tile name')
     parser.add_argument('--pixel_scale', type=float, default=0.2, help='Pixel scale in arcsec/pix')
-    parser.add_argument('--centering', choices=['subpixel', 'geometric'], default='subpixel',
+    parser.add_argument('--centering', choices=['subpixel', 'geometric', 'centred'], default='subpixel',
                         help='ngmix jacobian centre. subpixel is the current corrected default; '
-                             'geometric reproduces historical catalogues for controlled comparisons.')
+                             'geometric reproduces historical catalogues for controlled comparisons; '
+                             'centred also centres an odd stamp on the source pixel (subpixel jacobian).')
 
     args = parser.parse_args()
 
@@ -211,6 +212,12 @@ def main():
         # Measure shapes
         gg = np.full((num, 4), -1.)
         for kk in range(num):
+            if centering == 'centred':
+                stamp, gal_cen = shape.centred_cutout(gal_im, x[kk], y[kk], stamp_size)
+                if stamp.shape != (stamp_size, stamp_size):
+                    gal_cen = None
+                gg[kk, :] = get_shape(stamp, psf_im, scale=scale, gal_cen=gal_cen)
+                continue
             stamp = shape.cutout(gal_im, x[kk], y[kk], stamp_size=stamp_size)
             # True sub-pixel centre of the source in the stamp (0-indexed),
             # matching the integer cutout convention. Centring the ngmix
