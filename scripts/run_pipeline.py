@@ -215,8 +215,16 @@ def _mode_work_items(cfg, set_names=('response', 'self_response')):
     """Resolve simulation work items honouring simulation.shear_mode."""
     sim_cfg = cfg['simulation']
     if sim_cfg.get('shear_mode', 'half') == 'constant':
-        return _constant_work_items(sim_cfg)
-    return _simulation_work_items(sim_cfg, set_names=set_names)
+        items = _constant_work_items(sim_cfg)
+    else:
+        items = _simulation_work_items(sim_cfg, set_names=set_names)
+    only = cfg['cluster'].get('shear_label')
+    if only is None:
+        return items
+    items = [item for item in items if item['shear_label'] == only]
+    if not items:
+        raise ValueError(f"--shear-label {only} matches no simulation work item")
+    return items
 
 
 # ──────────────────────────────────────────────
@@ -918,6 +926,8 @@ Example:
     parser.add_argument('--batch-size', type=int, default=None)
     parser.add_argument('--n-trials', type=int, default=None)
     parser.add_argument('--output-path', type=str, default=None)
+    parser.add_argument('--shear-label', type=str, default=None,
+                        help='Steps 2-3 for this one shear leg only, e.g. --shear-label=-0.02 (one job per leg).')
     parser.add_argument('--max-galaxies-per-realization', type=int, default=None,
                         help='Optional smoke-test cap for generated galaxies per realization.')
     parser.add_argument('--area-deg2', type=float, default=None,
@@ -945,6 +955,8 @@ Example:
         cfg['training']['n_trials'] = args.n_trials
     if args.output_path is not None:
         cfg['simulation']['output_path'] = args.output_path
+    if args.shear_label is not None:
+        cfg['cluster']['shear_label'] = args.shear_label
     if args.max_galaxies_per_realization is not None:
         cfg['simulation']['max_galaxies_per_realization'] = args.max_galaxies_per_realization
     if args.area_deg2 is not None:
