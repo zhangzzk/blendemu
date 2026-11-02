@@ -401,7 +401,8 @@ def step_simulate(cfg):
 # ──────────────────────────────────────────────
 
 def _run_shape_measurement(cfg, targets, step_label, sim_set_name):
-    """Dispatch MPI shape-measurement batches for the given target group."""
+    """Dispatch MPI shape-measurement batches for the given target group on the legs of one
+    simulation set, or of several when sim_set_name is a tuple."""
     sim_cfg = cfg['simulation']
     sm_cfg = cfg['shape_measurement']
     cl_cfg = cfg['cluster']
@@ -409,7 +410,8 @@ def _run_shape_measurement(cfg, targets, step_label, sim_set_name):
     t0 = time.time()
     run_shape_path = os.path.join(SCRIPT_DIR, 'run_shape.py')
     n_mpi = cl_cfg['n_mpi']
-    work_items = _mode_work_items(cfg, set_names=(sim_set_name,))
+    set_names = (sim_set_name,) if isinstance(sim_set_name, str) else tuple(sim_set_name)
+    work_items = _mode_work_items(cfg, set_names=set_names)
 
     total_batches = sum(_n_batches(item['n_cases'], n_mpi) for item in work_items)
     batch_i = 0
@@ -460,6 +462,17 @@ def step_measure_secondaries(cfg):
     print("STEP 3b: Running shape measurements (secondaries)")
     print("=" * 60)
     _run_shape_measurement(cfg, targets='secondaries', step_label='Step 3b', sim_set_name='self_response')
+
+
+def step_measure_every_leg(cfg):
+    """Step 3all (half mode): primaries and secondaries on every leg of both sets, so each population is
+    measured alike on every shear (replaces 3 + 3b plus the later cross-leg passes)."""
+    print("\n" + "=" * 60)
+    print("STEP 3all: Running shape measurements (primaries and secondaries, every leg)")
+    print("=" * 60)
+    legs = ('response', 'self_response')
+    _run_shape_measurement(cfg, targets='primaries', step_label='Step 3all primaries', sim_set_name=legs)
+    _run_shape_measurement(cfg, targets='secondaries', step_label='Step 3all secondaries', sim_set_name=legs)
 
 
 def step_measure_all(cfg):
@@ -855,6 +868,7 @@ STEP_MAP = {
     '2':  ('simulate',             step_simulate),
     '3':  ('measure',              step_measure),
     '3b': ('measure_secondaries',  step_measure_secondaries),
+    '3all': ('measure_every_leg',  step_measure_every_leg),
     '4':  ('response',             step_response),
     '4b': ('self_response',        step_self_response),
     '5':  ('train',                step_train),
